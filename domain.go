@@ -27,8 +27,6 @@ import (
 	"encoding/xml"
 	"database/sql"
 	"errors"
-	"bytes"
-	"unicode"
 )
 
 const (
@@ -38,13 +36,6 @@ const (
 )
 
 type declareSqlType uint8
-
-const (
-	fieldNameConvertToUnderstore = iota
-	fieldNameConvertToCamel
-)
-
-type fieldNameConvertMethod uint8
 
 var (
 	errInterfaceIsNotSupported = errors.New("not supported type : interface")
@@ -58,74 +49,11 @@ var (
 	errNilPtr = errors.New("destination pointer is nil")
 )
 
-type DBOperator interface {
+type SqlProxy interface {
 	exec(query string, args ...interface{}) (sql.Result, error)
 	query(query string, args ...interface{}) (*sql.Rows, error)
+	queryRow(query string, args ...interface{}) *sql.Row
 	prepare(query string) (*sql.Stmt, error)
-}
-
-type FieldNameConvertStrategy interface {
-	convertFieldName(name string) string
-}
-
-type UnderstoreConvertStrategy struct {
-
-}
-
-func (u UnderstoreConvertStrategy) convertFieldName(name string) string {
-	// TODO
-	return name
-}
-
-type CamelConvertStrategy struct {
-
-}
-
-func (u CamelConvertStrategy) convertFieldName(name string) string {
-	var buffer bytes.Buffer
-	needUpper := true
-	for _, c := range name {
-		if needUpper {
-			buffer.WriteRune(unicode.ToUpper(c))
-			needUpper = false
-			continue
-		}
-
-		if c == '_' {
-			needUpper = true
-			continue
-		}
-
-		buffer.WriteRune(c)
-	}
-
-	return buffer.String()
-}
-
-// Row is the result of calling QueryRow to select a single row.
-type QueryedRow struct {
-	pstmt              *sql.Stmt
-	err                error
-	rows               *sql.Rows
-	fieldNameConverter FieldNameConvertStrategy
-}
-
-func (r *QueryedRow) Next() bool {
-	return r.rows.Next()
-}
-
-func newQueryedRowError(err error) *QueryedRow {
-	queryedRow := &QueryedRow{}
-	queryedRow.err = err
-	return queryedRow
-}
-
-
-func newQueryedRow(stmt *sql.Stmt, rows *sql.Rows) *QueryedRow {
-	queryedRow := &QueryedRow{}
-	queryedRow.pstmt = stmt
-	queryedRow.rows = rows
-	return queryedRow
 }
 
 type QueryStatementFinder interface {
@@ -144,29 +72,4 @@ type UserQuery struct {
 	SqlInsert  []QueryStatement    `xml:"insert"`
 	SqlUpdate  []QueryStatement    `xml:"update"`
 	SqlSelect  []QueryStatement    `xml:"select"`
-}
-
-type PreparedStatementResult struct {
-	idList			[]int64
-	rowAffected		int64
-}
-
-func (p *PreparedStatementResult) addInsertId(id int64)  {
-	if p.idList == nil {
-		p.idList = make([]int64, 0)
-	}
-
-	p.idList = append(p.idList, id)
-}
-
-func (p PreparedStatementResult) GetInsertIdList() []int64  {
-	return p.idList
-}
-
-func (p PreparedStatementResult) LastInsertId() (int64, error) {
-	return 0, nil
-}
-
-func (p PreparedStatementResult) RowsAffected() (int64, error) {
-	return p.rowAffected, nil
 }

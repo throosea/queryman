@@ -29,9 +29,9 @@ import (
 	"reflect"
 )
 
-func execute(operator DBOperator, stmt QueryStatement, v ...interface{}) (result sql.Result, err error) {
+func execute(sqlProxy SqlProxy, stmt QueryStatement, v ...interface{}) (result sql.Result, err error) {
 	if len(v) == 0 {
-		return operator.exec(stmt.Query)
+		return sqlProxy.exec(stmt.Query)
 	}
 
 	defer func() {
@@ -61,38 +61,38 @@ func execute(operator DBOperator, stmt QueryStatement, v ...interface{}) (result
 	case reflect.Ptr :
 		return nil, errPtrIsNotSupported
 	case reflect.Slice, reflect.Array :
-		return execList(operator, val, stmt)
+		return execList(sqlProxy, val, stmt)
 	case reflect.Struct :
-		return execWithObject(operator, stmt, val)
+		return execWithObject(sqlProxy, stmt, val)
 	case reflect.Map :
-		return execMap(operator, val, stmt)
+		return execMap(sqlProxy, val, stmt)
 	}
 
-	return execWithList(operator, stmt, v)
+	return execWithList(sqlProxy, stmt, v)
 }
 
-func execList(operator DBOperator, val interface{}, stmt QueryStatement) (sql.Result, error) {
+func execList(sqlProxy SqlProxy, val interface{}, stmt QueryStatement) (sql.Result, error) {
 	if slice, ok := val.([]interface{}); ok  {
-		return execWithList(operator, stmt, slice)
+		return execWithList(sqlProxy, stmt, slice)
 	}
 	passing := flattenToList(val)
-	return execWithList(operator, stmt, passing)
+	return execWithList(sqlProxy, stmt, passing)
 }
 
-func execMap(operator DBOperator, val interface{}, stmt QueryStatement) (sql.Result, error) {
+func execMap(sqlProxy SqlProxy, val interface{}, stmt QueryStatement) (sql.Result, error) {
 	if m, ok := val.(map[string]interface{}); ok  {
-		return execWithMap(operator, stmt, m)
+		return execWithMap(sqlProxy, stmt, m)
 	}
 	passing := flattenToMap(val)
-	return execWithMap(operator, stmt, passing)
+	return execWithMap(sqlProxy, stmt, passing)
 }
 
-func execWithObject(operator DBOperator, stmt QueryStatement, parameter interface{}) (sql.Result, error) {
+func execWithObject(sqlProxy SqlProxy, stmt QueryStatement, parameter interface{}) (sql.Result, error) {
 	m := flattenStructToMap(parameter)
-	return execWithMap(operator, stmt, m)
+	return execWithMap(sqlProxy, stmt, m)
 }
 
-func execWithMap(operator DBOperator, stmt QueryStatement, m map[string]interface{}) (sql.Result, error) {
+func execWithMap(sqlProxy SqlProxy, stmt QueryStatement, m map[string]interface{}) (sql.Result, error) {
 	param := make([]interface{}, 0)
 
 	for _,v := range stmt.columnMention {
@@ -103,11 +103,11 @@ func execWithMap(operator DBOperator, stmt QueryStatement, m map[string]interfac
 		param = append(param, found)
 	}
 
-	return operator.exec(stmt.Query, param...)
+	return sqlProxy.exec(stmt.Query, param...)
 }
 
 
-func execWithList(operator DBOperator, stmt QueryStatement, args []interface{}) (sql.Result, error) {
+func execWithList(sqlProxy SqlProxy, stmt QueryStatement, args []interface{}) (sql.Result, error) {
 	atype := reflect.TypeOf(args[0])
 
 	// reform ptr
@@ -122,22 +122,22 @@ func execWithList(operator DBOperator, stmt QueryStatement, args []interface{}) 
 	// check nested list
 	switch atype.Kind() {
 	case reflect.Slice :
-		return execWithNestedList(operator, stmt, args)
+		return execWithNestedList(sqlProxy, stmt, args)
 	case reflect.Struct :
-		return execWithStructList(operator, stmt, args)
+		return execWithStructList(sqlProxy, stmt, args)
 	case reflect.Map :
-		return execWithNestedMap(operator, stmt, args)
+		return execWithNestedMap(sqlProxy, stmt, args)
 	}
 
 	if len(stmt.columnMention) > len(args) {
 		return nil, fmt.Errorf("binding parameter count mismatch. defined=%d, args=%d", len(stmt.columnMention), len(args))
 	}
 
-	return operator.exec(stmt.Query, args...)
+	return sqlProxy.exec(stmt.Query, args...)
 }
 
 
-func execWithNestedList(operator DBOperator, stmt QueryStatement, args []interface{}) (sql.Result, error) {
+func execWithNestedList(sqlProxy SqlProxy, stmt QueryStatement, args []interface{}) (sql.Result, error) {
 	// all data in the list should be 'slice' or 'array'
 	for i, v := range args {
 		if reflect.TypeOf(v).Kind() != reflect.Slice && reflect.TypeOf(v).Kind() != reflect.Array {
@@ -148,13 +148,13 @@ func execWithNestedList(operator DBOperator, stmt QueryStatement, args []interfa
 		}
 	}
 
-	pstmt, err := operator.prepare(stmt.Query)
+	pstmt, err := sqlProxy.prepare(stmt.Query)
 	if err != nil {
 		return nil, err
 	}
 	defer pstmt.Close()
 
-	result := PreparedStatementResult{}
+	result := ExecMultiResult{}
 	for _, v := range args {
 		passing := flattenToList(v)
 		res, err := pstmt.Exec(passing...)
@@ -176,7 +176,7 @@ func execWithNestedList(operator DBOperator, stmt QueryStatement, args []interfa
 	return result, nil
 }
 
-func execWithNestedMap(operator DBOperator, stmt QueryStatement, args []interface{}) (sql.Result, error) {
+func execWithNestedMap(sqlProxy SqlProxy, stmt QueryStatement, args []interface{}) (sql.Result, error) {
 	// all data in the list should be 'map'
 	for i, v := range args {
 		if reflect.TypeOf(v).Kind() != reflect.Map {
@@ -187,13 +187,13 @@ func execWithNestedMap(operator DBOperator, stmt QueryStatement, args []interfac
 		}
 	}
 
-	pstmt, err := operator.prepare(stmt.Query)
+	pstmt, err := sqlProxy.prepare(stmt.Query)
 	if err != nil {
 		return nil, err
 	}
 	defer pstmt.Close()
 
-	result := PreparedStatementResult{}
+	result := ExecMultiResult{}
 	for _, v := range args {
 		m, ok := v.(map[string]interface{})
 		if !ok {
@@ -229,14 +229,14 @@ func execWithNestedMap(operator DBOperator, stmt QueryStatement, args []interfac
 }
 
 
-func execWithStructList(operator DBOperator, stmt QueryStatement, args []interface{}) (sql.Result, error) {
-	pstmt, err := operator.prepare(stmt.Query)
+func execWithStructList(sqlProxy SqlProxy, stmt QueryStatement, args []interface{}) (sql.Result, error) {
+	pstmt, err := sqlProxy.prepare(stmt.Query)
 	if err != nil {
 		return nil, err
 	}
 	defer pstmt.Close()
 
-	result := PreparedStatementResult{}
+	result := ExecMultiResult{}
 	for _, v := range args {
 		atype := reflect.TypeOf(v)
 		val := v
@@ -320,23 +320,23 @@ func flattenStructToMap(s interface{}) map[string]interface{} {
 }
 
 
-func queryRow(operator DBOperator, stmt QueryStatement, v ...interface{}) (queryedRow *QueryedRow) {
+func queryMultiRow(sqlProxy SqlProxy, stmt QueryStatement, v ...interface{}) (queryedRow *QueryResult) {
 	if len(v) == 0 {
-		pstmt, err := operator.prepare(stmt.Query)
+		pstmt, err := sqlProxy.prepare(stmt.Query)
 		if err != nil {
-			return newQueryedRowError(err)
+			return newQueryResultError(err)
 		}
 
 		rows, err := pstmt.Query()
 		if err != nil {
-			return newQueryedRowError(err)
+			return newQueryResultError(err)
 		}
-		return newQueryedRow(pstmt, rows)
+		return newQueryResult(pstmt, rows)
 	}
 
 	defer func() {
 		if r := recover(); r != nil {
-			queryedRow = newQueryedRowError(fmt.Errorf("fail to queryRow : %s", r))
+			queryedRow = newQueryResultError(fmt.Errorf("fail to queryMultiRow : %s", r))
 		}
 	}()
 
@@ -347,37 +347,37 @@ func queryRow(operator DBOperator, stmt QueryStatement, v ...interface{}) (query
 	if atype.Kind() == reflect.Ptr {
 		atype = atype.Elem()
 		if reflect.ValueOf(val).IsNil() {
-			return newQueryedRowError(errNilPtr)
+			return newQueryResultError(errNilPtr)
 		}
 		val = reflect.ValueOf(val).Elem().Interface()
 	}
 
 	switch atype.Kind() {
 	case reflect.Interface :
-		return newQueryedRowError(errInterfaceIsNotSupported)
+		return newQueryResultError(errInterfaceIsNotSupported)
 	case reflect.Ptr :
-		return newQueryedRowError(errPtrIsNotSupported)
+		return newQueryResultError(errPtrIsNotSupported)
 	case reflect.Slice, reflect.Array :
-		return queryList(operator, val, stmt)
+		return queryList(sqlProxy, val, stmt)
 	case reflect.Struct :
-		return queryWithObject(operator, stmt, val)
+		return queryWithObject(sqlProxy, stmt, val)
 	case reflect.Map :
-		return queryMap(operator, val, stmt)
+		return queryMap(sqlProxy, val, stmt)
 	}
 
-	return queryWithList(operator, stmt, v)
+	return queryWithList(sqlProxy, stmt, v)
 }
 
 
-func queryList(operator DBOperator, val interface{}, stmt QueryStatement) *QueryedRow {
+func queryList(sqlProxy SqlProxy, val interface{}, stmt QueryStatement) *QueryResult {
 	if slice, ok := val.([]interface{}); ok  {
-		return queryWithList(operator, stmt, slice)
+		return queryWithList(sqlProxy, stmt, slice)
 	}
 	passing := flattenToList(val)
-	return queryWithList(operator, stmt, passing)
+	return queryWithList(sqlProxy, stmt, passing)
 }
 
-func queryWithList(operator DBOperator, stmt QueryStatement, args []interface{}) *QueryedRow {
+func queryWithList(sqlProxy SqlProxy, stmt QueryStatement, args []interface{}) *QueryResult {
 	atype := reflect.TypeOf(args[0])
 
 	// reform ptr
@@ -388,139 +388,62 @@ func queryWithList(operator DBOperator, stmt QueryStatement, args []interface{})
 	// check nested list
 	switch atype.Kind() {
 	case reflect.Slice, reflect.Struct, reflect.Map :
-		return newQueryedRowError(fmt.Errorf("unacceptable parameter type in list. kind=%s", atype.Kind().String()))
+		return newQueryResultError(fmt.Errorf("unacceptable parameter type in list. kind=%s", atype.Kind().String()))
 	}
 
 	if len(stmt.columnMention) > len(args) {
-		return newQueryedRowError(fmt.Errorf("binding parameter count mismatch. defined=%d, args=%d", len(stmt.columnMention), len(args)))
+		return newQueryResultError(fmt.Errorf("binding parameter count mismatch. defined=%d, args=%d", len(stmt.columnMention), len(args)))
 	}
 
-	pstmt, err := operator.prepare(stmt.Query)
+	pstmt, err := sqlProxy.prepare(stmt.Query)
 	if err != nil {
-		return newQueryedRowError(err)
+		return newQueryResultError(err)
 	}
 
 	rows, err := pstmt.Query(args...)
 	if err != nil {
 		pstmt.Close()
-		return newQueryedRowError(err)
+		return newQueryResultError(err)
 	}
-	return newQueryedRow(pstmt, rows)
+	return newQueryResult(pstmt, rows)
 }
 
 
-func queryWithObject(operator DBOperator, stmt QueryStatement, parameter interface{}) *QueryedRow {
+func queryWithObject(sqlProxy SqlProxy, stmt QueryStatement, parameter interface{}) *QueryResult {
 	m := flattenStructToMap(parameter)
-	return queryWithMap(operator, stmt, m)
+	return queryWithMap(sqlProxy, stmt, m)
 }
 
-func queryWithMap(operator DBOperator, stmt QueryStatement, m map[string]interface{}) *QueryedRow {
+func queryWithMap(sqlProxy SqlProxy, stmt QueryStatement, m map[string]interface{}) *QueryResult {
 	param := make([]interface{}, 0)
 
 	for _,v := range stmt.columnMention {
 		found, ok := m[v]
 		if !ok {
-			return newQueryedRowError(fmt.Errorf("not found \"%s\" from parameter values", v))
+			return newQueryResultError(fmt.Errorf("not found \"%s\" from parameter values", v))
 		}
 		param = append(param, found)
 	}
 
-	pstmt, err := operator.prepare(stmt.Query)
+	pstmt, err := sqlProxy.prepare(stmt.Query)
 	if err != nil {
-		return newQueryedRowError(err)
+		return newQueryResultError(err)
 	}
 
 	rows, err := pstmt.Query(param...)
 	if err != nil {
 		pstmt.Close()
-		return newQueryedRowError(err)
+		return newQueryResultError(err)
 	}
-	return newQueryedRow(pstmt, rows)
+	return newQueryResult(pstmt, rows)
 }
 
-func queryMap(operator DBOperator, val interface{}, stmt QueryStatement) *QueryedRow {
+func queryMap(sqlProxy SqlProxy, val interface{}, stmt QueryStatement) *QueryResult {
 	if m, ok := val.(map[string]interface{}); ok  {
-		return queryWithMap(operator, stmt, m)
+		return queryWithMap(sqlProxy, stmt, m)
 	}
 	passing := flattenToMap(val)
-	return queryWithMap(operator, stmt, passing)
-}
-
-func (r *QueryedRow) GetError() (err error) {
-	return r.err
-}
-
-func (r *QueryedRow) Scan(v ...interface{}) (err error) {
-	if r.err != nil {
-		return err
-	}
-
-	defer func() {
-		if r := recover(); r != nil {
-			err = fmt.Errorf("fail to scan : %s", r)
-		}
-	}()
-
-	atype := reflect.TypeOf(v[0])
-	//val := v[0]
-
-	if atype.Kind() != reflect.Ptr {
-		return errQueryNeedsPtrParameter
-	}
-
-	if reflect.ValueOf(v[0]).IsNil() {
-		return errNilPtr
-	}
-
-	atype = atype.Elem()
-	val := reflect.ValueOf(v[0]).Elem()
-
-	switch atype.Kind() {
-	case reflect.Interface :
-		return errInterfaceIsNotSupported
-	case reflect.Ptr :
-		return errPtrIsNotSupported
-	case reflect.Struct :
-		return r.scanToStruct(&val)
-	}
-
-	return r.rows.Scan(v...)
-}
-
-func (r *QueryedRow) scanToStruct(val *reflect.Value) error {
-	if r.rows.Err() != nil {
-		return r.rows.Err()
-	}
-
-	columns, err := r.rows.Columns()
-	if err != nil {
-		return err
-	}
-
-	ss := newStructureScanner(r.fieldNameConverter, columns, val)
-
-	return r.rows.Scan(ss.cloneScannerList()...)
-	/*
-	anonymous := make([]interface{}, len(columns))
-	for i, c := range columns {
-		fieldName := r.fieldNameConverter.convertFieldName(c)
-		targetField := val.FieldByName(fieldName)
-		if !targetField.IsValid() || !targetField.CanInterface() {
-			return fmt.Errorf("field %s is not exist or settable", fieldName)
-		}
-
-		//fmt.Printf("[%s] : [%s]-[%s]\n", fieldName, targetField.Type().String(), targetField.Kind().String())
-		//if fieldName != "UpdateTime" {
-		//	anonymous[i] = targetField.Addr().Interface()
-		//} else {
-		//	b := make([]byte, 0)
-		//	anonymous[i] = &b
-		//}
-		anonymous[i] = targetField.Addr().Interface()
-	}
-
-	return r.rows.Scan(anonymous...)
-	*/
+	return queryWithMap(sqlProxy, stmt, passing)
 }
 
 type StructureScanner struct {
@@ -570,18 +493,4 @@ func (ss *StructureScanner) Scan(value interface{}) error {
 	}
 
 	return convertAssign(dest, value)
-}
-
-func (r *QueryedRow) Close() error {
-	defer func() {
-		if r.pstmt != nil {
-			r.pstmt.Close()
-		}
-	}()
-
-	if r.rows != nil {
-		return r.rows.Close()
-	}
-
-	return nil
 }

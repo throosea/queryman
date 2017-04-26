@@ -30,10 +30,11 @@ import (
 	"flag"
 	"io/ioutil"
 	"path/filepath"
-	_ "github.com/go-sql-driver/mysql"
+	mysql "github.com/go-sql-driver/mysql"
 	"time"
 	"bytes"
 	"errors"
+	"database/sql"
 )
 
 const (
@@ -137,7 +138,7 @@ func prepareXmlFile() (string, error) {
 		"\t\tUPDATE CITY SET AGE={Age} WHERE NAME={Name}\n" +
 		"\t</update>\n" +
 		"\t<select id=\"SelectCityWithName\">\n" +
-		"\t\tSELECT * FROM CITY WHERE NAME={Name}\n" +
+		"\t\tSELECT * FROM CITY WHERE NAME like {Name}\n" +
 		"\t</select>\n" +
 		"\t<select id=\"CountCity\">\n" +
 		"\t\tSELECT Count(*) FROM CITY\n" +
@@ -209,6 +210,19 @@ func dropAndCreateTable() error {
 	return nil
 }
 
+func setup()	{
+	if querymanStatus < statusReady {
+		panic("querymanager is not ready")
+		return
+	}
+
+	err := dropAndCreateTable()
+	if err != nil {
+		panic(fmt.Sprintf("%s", err.Error()))
+		return
+	}
+}
+
 func TestQueryUnknownStatementId(t *testing.T) {
 	if querymanStatus < statusReady {
 		t.Error("querymanager is not ready")
@@ -223,16 +237,7 @@ func TestQueryUnknownStatementId(t *testing.T) {
 
 
 func TestInsertBareParams(t *testing.T) {
-	if querymanStatus < statusReady {
-		t.Error("querymanager is not ready")
-		return
-	}
-
-	err := dropAndCreateTable()
-	if err != nil {
-		t.Errorf(err.Error())
-		return
-	}
+	setup()
 
 	result, err := queryManager.Execute(sqlInsertCity, "bare param", 42, true, 40.0, time.Now(), nil)
 	if err != nil {
@@ -254,16 +259,7 @@ func TestInsertBareParams(t *testing.T) {
 
 
 func TestInsertSlice(t *testing.T) {
-	if querymanStatus < statusReady {
-		t.Error("querymanager is not ready")
-		return
-	}
-
-	err := dropAndCreateTable()
-	if err != nil {
-		t.Errorf(err.Error())
-		return
-	}
+	setup()
 
 	args := make([]interface{}, 0)
 	args = append(args, "slice name")
@@ -291,16 +287,7 @@ func TestInsertSlice(t *testing.T) {
 }
 
 func TestInsertSlicePtr(t *testing.T) {
-	if querymanStatus < statusReady {
-		t.Error("querymanager is not ready")
-		return
-	}
-
-	err := dropAndCreateTable()
-	if err != nil {
-		t.Errorf(err.Error())
-		return
-	}
+	setup()
 
 	args := make([]interface{}, 0)
 	args = append(args, "slice ptr")
@@ -328,16 +315,7 @@ func TestInsertSlicePtr(t *testing.T) {
 }
 
 func TestInsertObject(t *testing.T) {
-	if querymanStatus < statusReady {
-		t.Error("querymanager is not ready")
-		return
-	}
-
-	err := dropAndCreateTable()
-	if err != nil {
-		t.Errorf(err.Error())
-		return
-	}
+	setup()
 
 	city := createCity()
 
@@ -360,16 +338,7 @@ func TestInsertObject(t *testing.T) {
 }
 
 func TestInsertObjectPtr(t *testing.T) {
-	if querymanStatus < statusReady {
-		t.Error("querymanager is not ready")
-		return
-	}
-
-	err := dropAndCreateTable()
-	if err != nil {
-		t.Errorf(err.Error())
-		return
-	}
+	setup()
 
 	city := createCity()
 	city.Name = "ptr test"
@@ -392,16 +361,7 @@ func TestInsertObjectPtr(t *testing.T) {
 }
 
 func TestInsertMap(t *testing.T) {
-	if querymanStatus < statusReady {
-		t.Error("querymanager is not ready")
-		return
-	}
-
-	err := dropAndCreateTable()
-	if err != nil {
-		t.Errorf(err.Error())
-		return
-	}
+	setup()
 
 	args := make(map[string]interface{})
 	args["Name"] = "map name"
@@ -431,16 +391,7 @@ func TestInsertMap(t *testing.T) {
 
 
 func TestInsertStringMap(t *testing.T) {
-	if querymanStatus < statusReady {
-		t.Error("querymanager is not ready")
-		return
-	}
-
-	err := dropAndCreateTable()
-	if err != nil {
-		t.Errorf(err.Error())
-		return
-	}
+	setup()
 
 	args := make(map[string]string)
 	args["Name"] = "map name"
@@ -469,16 +420,7 @@ func TestInsertStringMap(t *testing.T) {
 }
 
 func TestInsertNestedSlice(t *testing.T) {
-	if querymanStatus < statusReady {
-		t.Error("querymanager is not ready")
-		return
-	}
-
-	err := dropAndCreateTable()
-	if err != nil {
-		t.Errorf(err.Error())
-		return
-	}
+	setup()
 
 	params := make([][]interface{}, 0)
 
@@ -512,27 +454,18 @@ func TestInsertNestedSlice(t *testing.T) {
 		return
 	}
 
-	if pstmtResult, ok := result.(PreparedStatementResult); ok  {
+	if pstmtResult, ok := result.(ExecMultiResult); ok  {
 		if len(pstmtResult.GetInsertIdList()) != insertingCount {
 			t.Errorf("inserted id count is not valid. %d", len(pstmtResult.GetInsertIdList()))
 		}
 	} else {
-		t.Error("result type is not PreparedStatementResult")
+		t.Error("result type is not ExecMultiResult")
 	}
 }
 
 
 func TestInsertNestedMap(t *testing.T) {
-	if querymanStatus < statusReady {
-		t.Error("querymanager is not ready")
-		return
-	}
-
-	err := dropAndCreateTable()
-	if err != nil {
-		t.Errorf(err.Error())
-		return
-	}
+	setup()
 
 	params := make([]map[string]interface{}, 0)
 	insertingCount := 5
@@ -564,26 +497,17 @@ func TestInsertNestedMap(t *testing.T) {
 		return
 	}
 
-	if pstmtResult, ok := result.(PreparedStatementResult); ok  {
+	if pstmtResult, ok := result.(ExecMultiResult); ok  {
 		if len(pstmtResult.GetInsertIdList()) != insertingCount {
 			t.Errorf("inserted id count is not valid. %d", len(pstmtResult.GetInsertIdList()))
 		}
 	} else {
-		t.Error("result type is not PreparedStatementResult")
+		t.Error("result type is not ExecMultiResult")
 	}
 }
 
 func TestInsertNestedObject(t *testing.T) {
-	if querymanStatus < statusReady {
-		t.Error("querymanager is not ready")
-		return
-	}
-
-	err := dropAndCreateTable()
-	if err != nil {
-		t.Errorf(err.Error())
-		return
-	}
+	setup()
 
 	params := make([]interface{}, 0)
 	insertingCount := 5
@@ -608,26 +532,17 @@ func TestInsertNestedObject(t *testing.T) {
 		return
 	}
 
-	if pstmtResult, ok := result.(PreparedStatementResult); ok  {
+	if pstmtResult, ok := result.(ExecMultiResult); ok  {
 		if len(pstmtResult.GetInsertIdList()) != insertingCount {
 			t.Errorf("inserted id count is not valid. %d", len(pstmtResult.GetInsertIdList()))
 		}
 	} else {
-		t.Error("result type is not PreparedStatementResult")
+		t.Error("result type is not ExecMultiResult")
 	}
 }
 
 func TestInsertNestedObjectPtr(t *testing.T) {
-	if querymanStatus < statusReady {
-		t.Error("querymanager is not ready")
-		return
-	}
-
-	err := dropAndCreateTable()
-	if err != nil {
-		t.Errorf(err.Error())
-		return
-	}
+	setup()
 
 	params := make([]interface{}, 0)
 	insertingCount := 5
@@ -653,27 +568,18 @@ func TestInsertNestedObjectPtr(t *testing.T) {
 		return
 	}
 
-	if pstmtResult, ok := result.(PreparedStatementResult); ok  {
+	if pstmtResult, ok := result.(ExecMultiResult); ok  {
 		if len(pstmtResult.GetInsertIdList()) != insertingCount {
 			t.Errorf("inserted id count is not valid. %d", len(pstmtResult.GetInsertIdList()))
 		}
 	} else {
-		t.Error("result type is not PreparedStatementResult")
+		t.Error("result type is not ExecMultiResult")
 	}
 }
 
 
 func TestTransactionInsert(t *testing.T) {
-	if querymanStatus < statusReady {
-		t.Error("querymanager is not ready")
-		return
-	}
-
-	err := dropAndCreateTable()
-	if err != nil {
-		t.Errorf(err.Error())
-		return
-	}
+	setup()
 
 	city := createCity()
 	tx, err := queryManager.Begin()
@@ -710,26 +616,17 @@ func TestTransactionInsert(t *testing.T) {
 
 
 func TestQueryButNoMoreData(t *testing.T) {
-	if querymanStatus < statusReady {
-		t.Error("querymanager is not ready")
+	setup()
+
+	result := queryManager.Query(sqlSelectCityWithName, "slice name") // time is null
+	if result.GetError() != nil {
+		t.Error(result.GetError())
 		return
 	}
 
-	err := dropAndCreateTable()
-	if err != nil {
-		t.Errorf(err.Error())
-		return
-	}
+	defer result.Close()
 
-	rows := queryManager.Query(sqlSelectCityWithName, "slice name")	// time is null
-	if rows.GetError() != nil {
-		t.Error(rows.GetError())
-		return
-	}
-
-	defer rows.Close()
-
-	if !rows.Next() {
+	if !result.Next() {
 		return
 	}
 
@@ -737,39 +634,30 @@ func TestQueryButNoMoreData(t *testing.T) {
 }
 
 func TestQueryOneObject(t *testing.T) {
-	if querymanStatus < statusReady {
-		t.Error("querymanager is not ready")
-		return
-	}
-
-	err := dropAndCreateTable()
-	if err != nil {
-		t.Errorf(err.Error())
-		return
-	}
+	setup()
 
 	// insert sample
-	_, err = queryManager.Execute(sqlInsertCity, "bare param", 42, true, 40.0, time.Now(), nil)
+	_, err := queryManager.Execute(sqlInsertCity, "bare param", 42, true, 40.0, time.Now(), nil)
 	if err != nil {
 		t.Error(err.Error())
 		return
 	}
 
 	city := &City{}
-	rows := queryManager.Query(sqlSelectCityWithName, "bare param")	// time is null
-	if rows.GetError() != nil {
-		t.Error(rows.GetError())
+	result := queryManager.Query(sqlSelectCityWithName, "bare param") // time is null
+	if result.GetError() != nil {
+		t.Error(result.GetError())
 		return
 	}
 
-	defer rows.Close()
+	defer result.Close()
 
-	if !rows.Next() {
+	if !result.Next() {
 		t.Error(errNoMoreData)
 		return
 	}
 
-	err = rows.Scan(city)
+	err = result.Scan(city)
 	if err != nil {
 		t.Errorf("fail to scan : %s", err.Error())
 		return
@@ -778,19 +666,10 @@ func TestQueryOneObject(t *testing.T) {
 
 
 func TestQueryOneBare(t *testing.T) {
-	if querymanStatus < statusReady {
-		t.Error("querymanager is not ready")
-		return
-	}
-
-	err := dropAndCreateTable()
-	if err != nil {
-		t.Errorf(err.Error())
-		return
-	}
+	setup()
 
 	// insert sample
-	_, err = queryManager.Execute(sqlInsertCity, "unexported_field", 42, true, 40.0, time.Now(), time.Now())
+	_, err := queryManager.Execute(sqlInsertCity, "unexported_field", 42, true, 40.0, time.Now(), time.Now())
 	if err != nil {
 		t.Error(err.Error())
 		return
@@ -804,13 +683,13 @@ func TestQueryOneBare(t *testing.T) {
 	city := &City{}
 	city.Name = "initial city name"
 	sample := HasUnexportedFieldCity{Name:"unexported_field"}
-	rows := queryManager.Query(sqlSelectCityWithName, sample)
-	if rows.GetError() != nil {
-		t.Errorf(rows.GetError().Error())
+	result := queryManager.Query(sqlSelectCityWithName, sample)
+	if result.GetError() != nil {
+		t.Errorf(result.GetError().Error())
 		return
 	}
 
-	defer rows.Close()
+	defer result.Close()
 	var id int
 	var name string
 	var age int
@@ -819,11 +698,132 @@ func TestQueryOneBare(t *testing.T) {
 	var createTime time.Time
 	var updateTime time.Time
 
-	if !rows.Next() {
+	if !result.Next() {
 		t.Error(errNoMoreData)
 		return
 	}
-	err = rows.Scan(&id, &name, &age, &isMan, &percentage, &createTime, &updateTime)
+	err = result.Scan(&id, &name, &age, &isMan, &percentage, &createTime, &updateTime)
+	if err != nil {
+		t.Error(err.Error())
+		return
+	}
+}
+
+func TestQueryOneWithMap(t *testing.T) {
+	setup()
+
+	// insert sample
+	_, err := queryManager.Execute(sqlInsertCity, "map_name", 42, true, 40.0, time.Now(), time.Now())
+	if err != nil {
+		t.Error(err.Error())
+		return
+	}
+
+	m := make(map[string]string)
+	m["Name"] = "map_name"
+	result := queryManager.Query(sqlSelectCityWithName, m)
+	if result.GetError() != nil {
+		t.Errorf(result.GetError().Error())
+		return
+	}
+
+	defer result.Close()
+	var id int
+	var name string
+	var age int
+	var isMan bool
+	var percentage float32
+	var createTime time.Time
+	var updateTime time.Time
+
+	if !result.Next() {
+		t.Error(errNoMoreData)
+		return
+	}
+	err = result.Scan(&id, &name, &age, &isMan, &percentage, &createTime, &updateTime)
+	if err != nil {
+		t.Error(err.Error())
+		return
+	}
+}
+
+func TestQueryNullAndSkipSetting(t *testing.T) {
+	setup()
+
+	// insert sample
+	_, err := queryManager.Execute(sqlInsertCity, "nullable", nil, nil, nil, nil, nil)
+	if err != nil {
+		t.Error(err.Error())
+		return
+	}
+
+	type NullableCity struct {
+		Id		int
+		Name	string
+		Age		int
+		IsMan	bool
+		Percentage float32
+		CreateTime time.Time
+		UpdateTime time.Time
+	}
+
+	city := NullableCity{}
+	result := queryManager.Query(sqlSelectCityWithName, "nullable")
+	if result.GetError() != nil {
+		t.Errorf(result.GetError().Error())
+		return
+	}
+
+	defer result.Close()
+
+	if !result.Next() {
+		t.Error(errNoMoreData)
+		return
+	}
+
+	err = result.Scan(&city)
+	if err != nil {
+		t.Error(err.Error())
+		return
+	}
+}
+
+
+func TestQueryNullScanning(t *testing.T) {
+	setup()
+
+	// insert sample
+	_, err := queryManager.Execute(sqlInsertCity, "nullable", nil, nil, nil, nil, nil)
+	if err != nil {
+		t.Error(err.Error())
+		return
+	}
+
+	type NullableCity struct {
+		Id		sql.NullInt64
+		Name	sql.NullString
+		Age		sql.NullInt64
+		IsMan	sql.NullBool
+		Percentage sql.NullFloat64
+		CreateTime mysql.NullTime
+		UpdateTime mysql.NullTime
+	}
+
+	city := NullableCity{}
+	result := queryManager.Query(sqlSelectCityWithName, "%null%")
+	if result.GetError() != nil {
+		t.Errorf(result.GetError().Error())
+		return
+	}
+
+	defer result.Close()
+
+	if !result.Next() {
+		t.Error(errNoMoreData)
+		return
+	}
+
+	err = result.Scan(&city)
 	if err != nil {
 		t.Error(err.Error())
 		return

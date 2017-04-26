@@ -27,13 +27,57 @@ import (
 	"strings"
 	"fmt"
 	"bytes"
+	"unicode"
 )
 
 const (
-	DELIM_START_CH = '{'
-	DELIM_START = "{"
-	DELIM_STOP = "}"
+	delimStartCharacter = '{'
+	delimStartString    = "{"
+	delimStopString     = "}"
 )
+
+const (
+	fieldNameConvertToUnderstore = iota
+	fieldNameConvertToCamel
+)
+
+type fieldNameConvertMethod uint8
+
+type FieldNameConvertStrategy interface {
+	convertFieldName(name string) string
+}
+
+type UnderstoreConvertStrategy struct {
+}
+
+func (u UnderstoreConvertStrategy) convertFieldName(name string) string {
+	// TODO
+	return name
+}
+
+type CamelConvertStrategy struct {
+}
+
+func (u CamelConvertStrategy) convertFieldName(name string) string {
+	var buffer bytes.Buffer
+	needUpper := true
+	for _, c := range name {
+		if needUpper {
+			buffer.WriteRune(unicode.ToUpper(c))
+			needUpper = false
+			continue
+		}
+
+		if c == '_' {
+			needUpper = true
+			continue
+		}
+
+		buffer.WriteRune(c)
+	}
+
+	return buffer.String()
+}
 
 
 /*
@@ -105,7 +149,7 @@ func (n *UserQueryNormalizer) normalize(stmt *QueryStatement) error {
 	queryLen := len(stmt.Query)
 	for i:=0; i<queryLen; i++ {
 		ch := stmt.Query[i]
-		if ch != DELIM_START_CH {
+		if ch != delimStartCharacter {
 			buffer.WriteByte(ch)
 			continue
 		}
@@ -113,13 +157,13 @@ func (n *UserQueryNormalizer) normalize(stmt *QueryStatement) error {
 		if i >= queryLen - 2 {
 			return fmt.Errorf("incompleted variable closer : %s", stmt.Query)
 		}
-		stopIndex := strings.Index(stmt.Query[i+1:], DELIM_STOP)
+		stopIndex := strings.Index(stmt.Query[i+1:], delimStopString)
 		if stopIndex < 1 {
 			return fmt.Errorf("incompleted variable closer : %s", stmt.Query)
 		}
 
 		v := stmt.Query[i+1:i+1+stopIndex]
-		if strings.Index(v, DELIM_START) >= 0 {
+		if strings.Index(v, delimStartString) >= 0 {
 			return fmt.Errorf("invalid variable declare format : %s", stmt.Query)
 		}
 		stmt.columnMention = append(stmt.columnMention, v)

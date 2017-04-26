@@ -58,6 +58,10 @@ func (t *DBTransaction) query(query string, args ...interface{}) (*sql.Rows, err
 	return t.tx.Query(query, args...)
 }
 
+func (t *DBTransaction) queryRow(query string, args ...interface{}) *sql.Row {
+	return t.tx.QueryRow(query, args...)
+}
+
 func (t *DBTransaction) prepare(query string) (*sql.Stmt, error) {
 	return t.prepare(query)
 }
@@ -76,17 +80,17 @@ func (t *DBTransaction) Execute(id string, v ...interface{}) (sql.Result, error)
 }
 
 
-func (t *DBTransaction) Query(id string, v ...interface{}) *QueryedRow {
+func (t *DBTransaction) Query(id string, v ...interface{}) *QueryResult {
 	stmt, err := t.queryFinder.find(id)
 	if err != nil {
-		return newQueryedRowError(err)
+		return newQueryResultError(err)
 	}
 
 	if stmt.sqlTyp != sqlTypeSelect {
-		return newQueryedRowError(errQueryInvalidSqlType)
+		return newQueryResultError(errQueryInvalidSqlType)
 	}
 
-	queryedRow := queryRow(t, stmt, v...)
+	queryedRow := queryMultiRow(t, stmt, v...)
 	queryedRow.fieldNameConverter = t.fieldNameConverter
 	return queryedRow
 }

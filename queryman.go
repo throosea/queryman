@@ -80,6 +80,10 @@ func (man *QueryMan) query(query string, args ...interface{}) (*sql.Rows, error)
 	return man.db.Query(query, args...)
 }
 
+func (man *QueryMan) queryRow(query string, args ...interface{}) *sql.Row {
+	return man.db.QueryRow(query, args...)
+}
+
 func (man *QueryMan) prepare(query string) (*sql.Stmt, error) {
 	return man.db.Prepare(query)
 }
@@ -107,19 +111,33 @@ func (man *QueryMan) Execute(id string, v ...interface{}) (sql.Result, error) {
 }
 
 
-func (man *QueryMan) Query(id string, v ...interface{}) *QueryedRow {
+func (man *QueryMan) Query(id string, v ...interface{}) *QueryResult {
 	stmt, err := man.find(id)
 	if err != nil {
-		return newQueryedRowError(err)
+		return newQueryResultError(err)
 	}
 
 	if stmt.sqlTyp != sqlTypeSelect {
-		return newQueryedRowError(errQueryInvalidSqlType)
+		return newQueryResultError(errQueryInvalidSqlType)
 	}
 
-	queryedRow := queryRow(man, stmt, v...)
+	queryedRow := queryMultiRow(man, stmt, v...)
 	queryedRow.fieldNameConverter = man.fieldNameConverter
 	return queryedRow
+}
+
+func (man *QueryMan) QueryRow(id string, v ...interface{}) (*sql.Row, error) {
+	stmt, err := man.find(id)
+	if err != nil {
+		return nil, err
+	}
+
+	if stmt.sqlTyp != sqlTypeSelect {
+		return nil, errQueryInvalidSqlType
+	}
+
+	row := man.db.QueryRow(stmt.Query, v...)
+	return row, nil
 }
 
 func (man *QueryMan) Begin() (*DBTransaction, error) {

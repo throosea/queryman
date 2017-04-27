@@ -47,6 +47,8 @@ var (
 	errQueryInsufficientParameter = errors.New("insufficient query parameter for select result")
 	errQueryNeedsPtrParameter = errors.New("when you select in query, you have to pass parameter as ptr")
 	errNilPtr = errors.New("destination pointer is nil")
+	errNoRows = errors.New("sql: no rows in result set")
+	errNoInsertId = errors.New("sql: no insert id")
 )
 
 type SqlProxy interface {

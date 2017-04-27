@@ -94,3 +94,20 @@ func (t *DBTransaction) Query(id string, v ...interface{}) *QueryResult {
 	queryedRow.fieldNameConverter = t.fieldNameConverter
 	return queryedRow
 }
+
+
+func (t *DBTransaction) QueryRow(id string, v ...interface{}) *QueryRowResult {
+	stmt, err := t.queryFinder.find(id)
+	if err != nil {
+		return newQueryRowResultError(err)
+	}
+
+	if stmt.sqlTyp != sqlTypeSelect {
+		return newQueryRowResultError(errQueryInvalidSqlType)
+	}
+
+	queryResult := queryMultiRow(t, stmt, v...)
+	queryRowResult := newQueryRowResult(queryResult.pstmt, queryResult.rows)
+	queryRowResult.fieldNameConverter = t.fieldNameConverter
+	return queryRowResult
+}

@@ -126,18 +126,21 @@ func (man *QueryMan) Query(id string, v ...interface{}) *QueryResult {
 	return queryedRow
 }
 
-func (man *QueryMan) QueryRow(id string, v ...interface{}) (*sql.Row, error) {
+func (man *QueryMan) QueryRow(id string, v ...interface{}) *QueryRowResult {
 	stmt, err := man.find(id)
 	if err != nil {
-		return nil, err
+		return newQueryRowResultError(err)
 	}
 
 	if stmt.sqlTyp != sqlTypeSelect {
-		return nil, errQueryInvalidSqlType
+		return newQueryRowResultError(errQueryInvalidSqlType)
 	}
 
-	row := man.db.QueryRow(stmt.Query, v...)
-	return row, nil
+	queryResult := queryMultiRow(man, stmt, v...)
+	queryRowResult := newQueryRowResult(queryResult.pstmt, queryResult.rows)
+	queryRowResult.fieldNameConverter = man.fieldNameConverter
+
+	return queryRowResult
 }
 
 func (man *QueryMan) Begin() (*DBTransaction, error) {

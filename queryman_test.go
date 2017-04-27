@@ -665,7 +665,64 @@ func TestQueryOneObject(t *testing.T) {
 }
 
 
-func TestQueryOneBare(t *testing.T) {
+
+func TestQueryRowBare(t *testing.T) {
+	setup()
+
+	// insert sample
+	_, err := queryManager.Execute(sqlInsertCity, "sample_city", 42, true, 40.0, time.Now(), time.Now())
+	if err != nil {
+		t.Error(err.Error())
+		return
+	}
+
+	count := 0
+	err = queryManager.QueryRow(sqlCountCity).Scan(&count)
+	if err != nil {
+		t.Error(err.Error())
+		return
+	}
+
+	if count != 1 {
+		t.Errorf("invalid city count %d", count)
+		return
+	}
+}
+
+func TestQueryRowStruct(t *testing.T) {
+	setup()
+
+	// insert sample
+	_, err := queryManager.Execute(sqlInsertCity, "unexported_field", 42, true, 40.0, time.Now(), time.Now())
+	if err != nil {
+		t.Error(err.Error())
+		return
+	}
+
+	type NullableCity struct {
+		Id		sql.NullInt64
+		Name	sql.NullString
+		Age		sql.NullInt64
+		IsMan	sql.NullBool
+		Percentage sql.NullFloat64
+		CreateTime mysql.NullTime
+		UpdateTime mysql.NullTime
+	}
+
+	city := NullableCity{}
+
+	err = queryManager.QueryRow(sqlSelectCityWithName, "unexported_field").Scan(&city)
+	if err != nil {
+		t.Error(err.Error())
+		return
+	}
+
+	if city.Age.Int64 != 42 {
+		t.Errorf("selecting mismatch")
+	}
+}
+
+func TestQueryBare(t *testing.T) {
 	setup()
 
 	// insert sample
@@ -709,7 +766,7 @@ func TestQueryOneBare(t *testing.T) {
 	}
 }
 
-func TestQueryOneWithMap(t *testing.T) {
+func TestQueryWithMap(t *testing.T) {
 	setup()
 
 	// insert sample

@@ -28,6 +28,8 @@ import (
 	"fmt"
 	"bytes"
 	"unicode"
+	"reflect"
+	"database/sql"
 )
 
 const (
@@ -175,3 +177,52 @@ func (n *UserQueryNormalizer) normalize(stmt *QueryStatement) error {
 	return nil
 }
 
+
+type StructureScanner struct {
+	scanIndex		int
+	fieldNameList	[]string
+	source			*reflect.Value
+}
+
+func newStructureScanner(converter FieldNameConvertStrategy, columns []string, val *reflect.Value) *StructureScanner {
+	ss := &StructureScanner{}
+	ss.scanIndex = 0
+	ss.fieldNameList = make([]string, len(columns))
+	for i:=0; i<len(columns); i++ {
+		ss.fieldNameList[i] = converter.convertFieldName(columns[i])
+	}
+	ss.source = val
+	return ss
+}
+
+func (ss *StructureScanner) cloneScannerList() []interface{} {
+	scanners := make([]interface{}, len(ss.fieldNameList))
+	for i:=0; i<len(ss.fieldNameList); i++ {
+		scanners[i] = ss
+	}
+	return scanners
+}
+
+// Scan implements the Scanner interface.
+func (ss *StructureScanner) Scan(value interface{}) error {
+	fieldName := ss.fieldNameList[ss.scanIndex]
+	ss.scanIndex++
+
+
+	targetField := ss.source.FieldByName(fieldName)
+	if !targetField.IsValid() || !targetField.CanInterface() {
+		return fmt.Errorf("field %s is not exist or settable", fieldName)
+	}
+
+	dest := targetField.Addr().Interface()
+	if scanner, ok := dest.(sql.Scanner); ok {
+		return scanner.Scan(value)
+	}
+
+	switch value.(type) {
+	case nil:
+		return nil		// do nothing...
+	}
+
+	return convertAssign(dest, value)
+}

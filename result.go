@@ -37,16 +37,16 @@ type QueryResult struct {
 }
 
 func newQueryResultError(err error) *QueryResult {
-	queryedRow := &QueryResult{}
-	queryedRow.err = err
-	return queryedRow
+	queryResult := &QueryResult{}
+	queryResult.err = err
+	return queryResult
 }
 
 func newQueryResult(stmt *sql.Stmt, rows *sql.Rows) *QueryResult {
-	queryedRow := &QueryResult{}
-	queryedRow.pstmt = stmt
-	queryedRow.rows = rows
-	return queryedRow
+	queryResult := &QueryResult{}
+	queryResult.pstmt = stmt
+	queryResult.rows = rows
+	return queryResult
 }
 
 func (r *QueryResult) Next() bool {
@@ -60,6 +60,10 @@ func (r *QueryResult) GetError() (err error) {
 func (r *QueryResult) Scan(v ...interface{}) (err error) {
 	if r.err != nil {
 		return err
+	}
+
+	if r.rows.Err() != nil {
+		return r.rows.Err()
 	}
 
 	defer func() {
@@ -123,23 +127,85 @@ func (r *QueryResult) Close() error {
 }
 
 type QueryRowResult struct {
+	pstmt              *sql.Stmt
 	err                error
-	row               *sql.Row
+	rows               *sql.Rows
 	fieldNameConverter FieldNameConvertStrategy
 }
 
 func newQueryRowResultError(err error) *QueryRowResult {
-	queryedRow := &QueryRowResult{}
-	queryedRow.err = err
-	return queryedRow
+	queryResult := &QueryRowResult{}
+	queryResult.err = err
+	return queryResult
 }
 
-func newQueryRowResult(row *sql.Row) *QueryRowResult {
-	queryedRow := &QueryRowResult{}
-	queryedRow.row = row
-	return queryedRow
+func newQueryRowResult(stmt *sql.Stmt, rows *sql.Rows) *QueryRowResult {
+	queryResult := &QueryRowResult{}
+	queryResult.pstmt = stmt
+	queryResult.rows = rows
+	return queryResult
 }
 
+func (r *QueryRowResult) Scan(v ...interface{}) (err error) {
+	if r.err != nil {
+		return err
+	}
+
+	if r.rows.Err() != nil {
+		return r.rows.Err()
+	}
+
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("fail to scan : %s", r)
+		}
+	}()
+
+	defer r.pstmt.Close()
+	defer r.rows.Close()
+
+	if !r.rows.Next() {
+		if err := r.rows.Err(); err != nil {
+			return err
+		}
+		return errNoRows
+	}
+
+	atype := reflect.TypeOf(v[0])
+
+	if atype.Kind() != reflect.Ptr {
+		return errQueryNeedsPtrParameter
+	}
+
+	if reflect.ValueOf(v[0]).IsNil() {
+		return errNilPtr
+	}
+
+	atype = atype.Elem()
+	val := reflect.ValueOf(v[0]).Elem()
+
+	switch atype.Kind() {
+	case reflect.Interface :
+		return errInterfaceIsNotSupported
+	case reflect.Ptr :
+		return errPtrIsNotSupported
+	case reflect.Struct :
+		return r.scanToStruct(&val)
+	}
+
+	return r.rows.Scan(v...)
+}
+
+func (r *QueryRowResult) scanToStruct(val *reflect.Value) error {
+	columns, err := r.rows.Columns()
+	if err != nil {
+		return err
+	}
+
+	ss := newStructureScanner(r.fieldNameConverter, columns, val)
+
+	return r.rows.Scan(ss.cloneScannerList()...)
+}
 
 type ExecMultiResult struct {
 	idList			[]int64
@@ -159,7 +225,11 @@ func (p ExecMultiResult) GetInsertIdList() []int64  {
 }
 
 func (p ExecMultiResult) LastInsertId() (int64, error) {
-	return 0, nil
+	if p.idList == nil || len(p.idList) == 0 {
+		return 0, errNoInsertId
+	}
+
+	return p.idList[0], nil
 }
 
 func (p ExecMultiResult) RowsAffected() (int64, error) {

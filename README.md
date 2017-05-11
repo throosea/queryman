@@ -1,6 +1,8 @@
 # Golang xml base DB Query Manager #
 
-Package throosea.com/queryman implements a xml base query infrastructure for Go. 
+Package throosea.com/queryman implements a xml base query infrastructure for Go.
+
+below xml file is sample 
 
 ```
 <?xml version="1.0" encoding="UTF-8" ?>

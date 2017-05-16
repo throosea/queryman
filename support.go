@@ -189,7 +189,7 @@ func newStructureScanner(converter FieldNameConvertStrategy, columns []string, v
 	ss.scanIndex = 0
 	ss.fieldNameList = make([]string, len(columns))
 	for i:=0; i<len(columns); i++ {
-		ss.fieldNameList[i] = converter.convertFieldName(columns[i])
+		ss.fieldNameList[i] = converter.convertFieldName(strings.ToLower(columns[i]))
 	}
 	ss.source = val
 	return ss

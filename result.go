@@ -27,6 +27,7 @@ import (
 	"reflect"
 	"database/sql"
 	"fmt"
+	"database/sql/driver"
 )
 
 type QueryResult struct {
@@ -91,7 +92,9 @@ func (r *QueryResult) Scan(v ...interface{}) (err error) {
 	case reflect.Ptr :
 		return errPtrIsNotSupported
 	case reflect.Struct :
-		return r.scanToStruct(&val)
+		if _, is := val.Interface().(driver.Valuer); !is {
+			return r.scanToStruct(&val)
+		}
 	}
 
 	return r.rows.Scan(v...)
@@ -190,7 +193,9 @@ func (r *QueryRowResult) Scan(v ...interface{}) (err error) {
 	case reflect.Ptr :
 		return errPtrIsNotSupported
 	case reflect.Struct :
-		return r.scanToStruct(&val)
+		if _, is := val.Interface().(driver.Valuer); !is {
+			return r.scanToStruct(&val)
+		}
 	}
 
 	return r.rows.Scan(v...)

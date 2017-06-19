@@ -95,10 +95,10 @@ func TestMain(m *testing.M) {
 }
 
 func prepareSourceName() {
-	dbName := flag.String("db", "local", "database name")
-	userName := flag.String("user", "local", "Username")
+	dbName := flag.String("db", "mmate", "database name")
+	userName := flag.String("user", "mmate", "Username")
 	password := flag.String("password", "angel", "passsword")
-	host := flag.String("host", "10.211.55.7:3306", "ip and port")
+	host := flag.String("host", "10.211.55.8:3306", "ip and port")
 
 	flag.Parse()
 
@@ -390,16 +390,16 @@ func TestInsertMap(t *testing.T) {
 }
 
 
-func TestInsertStringMap(t *testing.T) {
+func TestInsertNullableSlice(t *testing.T) {
 	setup()
 
-	args := make(map[string]string)
-	args["Name"] = "map name"
-	args["Age"] = "100"
-	args["IsMan"] = "true"
-	args["Percentage"] = "34.0"
-	args["CreateTime"] = time.Now().String()
-	args["UpdateTime"] = time.Now().String()
+	args := make([]interface{}, 0)
+	args = append(args, sql.NullString{String:"test_city"})
+	args = append(args, sql.NullInt64{})
+	args = append(args, sql.NullBool{})
+	args = append(args, sql.NullFloat64{})
+	args = append(args, time.Now())
+	args = append(args, nil)
 
 	result, err := queryManager.Execute(sqlInsertCity, args)
 	if err != nil {

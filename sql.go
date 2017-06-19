@@ -27,6 +27,7 @@ import (
 	"database/sql"
 	"fmt"
 	"reflect"
+	"database/sql/driver"
 )
 
 func execute(sqlProxy SqlProxy, stmt QueryStatement, v ...interface{}) (result sql.Result, err error) {
@@ -63,7 +64,9 @@ func execute(sqlProxy SqlProxy, stmt QueryStatement, v ...interface{}) (result s
 	case reflect.Slice, reflect.Array :
 		return execList(sqlProxy, val, stmt)
 	case reflect.Struct :
-		return execWithObject(sqlProxy, stmt, val)
+		if _, is := val.(driver.Valuer); !is {
+			return execWithObject(sqlProxy, stmt, val)
+		}
 	case reflect.Map :
 		return execMap(sqlProxy, val, stmt)
 	}
@@ -109,6 +112,7 @@ func execWithMap(sqlProxy SqlProxy, stmt QueryStatement, m map[string]interface{
 
 func execWithList(sqlProxy SqlProxy, stmt QueryStatement, args []interface{}) (sql.Result, error) {
 	atype := reflect.TypeOf(args[0])
+	val := args[0]
 
 	// reform ptr
 	if atype.Kind() == reflect.Ptr {
@@ -117,6 +121,7 @@ func execWithList(sqlProxy SqlProxy, stmt QueryStatement, args []interface{}) (s
 		if reflect.ValueOf(args[0]).IsNil() {
 			return nil, errNilPtr
 		}
+		val = reflect.ValueOf(val).Elem().Interface()
 	}
 
 	// check nested list
@@ -124,7 +129,9 @@ func execWithList(sqlProxy SqlProxy, stmt QueryStatement, args []interface{}) (s
 	case reflect.Slice :
 		return execWithNestedList(sqlProxy, stmt, args)
 	case reflect.Struct :
-		return execWithStructList(sqlProxy, stmt, args)
+		if _, is := val.(driver.Valuer); !is {
+			return execWithStructList(sqlProxy, stmt, args)
+		}
 	case reflect.Map :
 		return execWithNestedMap(sqlProxy, stmt, args)
 	}

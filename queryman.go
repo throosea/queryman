@@ -123,7 +123,8 @@ func buildUserQueryStatement(manager *QueryMan, query string)	(QueryStatement, e
 	stmt.Query = query
 
 	err := manager.registStatement(stmt)
-	return stmt, err
+	saved, _ := manager.statementMap[strings.ToUpper(query)]
+	return saved, err
 }
 
 func getDeclareSqlType(query string) declareSqlType {

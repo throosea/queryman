@@ -241,15 +241,31 @@ func TestUserQuery(t *testing.T) {
 		return
 	}
 
-	var count int
-	err := queryManager.QueryRow("SELECT 1 FROM DUAL").Scan(&count)
+	// insert sample
+	_, err := queryManager.Execute(sqlInsertCity, "bare param", 42, true, 40.0, time.Now(), nil)
 	if err != nil {
 		t.Error(err.Error())
 		return
 	}
 
-	if count != 1 {
-		t.Errorf("invalid count %d", count)
+	userQuery := "SELECT * FROM CITY WHERE NAME like {Name}"
+	city := &City{}
+	result := queryManager.Query(userQuery, "bare param") // time is null
+	if result.GetError() != nil {
+		t.Error(result.GetError())
+		return
+	}
+
+	defer result.Close()
+
+	if !result.Next() {
+		t.Error(errNoMoreData)
+		return
+	}
+
+	err = result.Scan(city)
+	if err != nil {
+		t.Errorf("fail to scan : %s", err.Error())
 		return
 	}
 }

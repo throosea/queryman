@@ -151,7 +151,7 @@ func newQueryRowResult(stmt *sql.Stmt, rows *sql.Rows) *QueryRowResult {
 
 func (r *QueryRowResult) Scan(v ...interface{}) (err error) {
 	if r.err != nil {
-		return err
+		return r.err
 	}
 
 	if r.rows.Err() != nil {

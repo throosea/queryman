@@ -235,6 +235,25 @@ func TestQueryUnknownStatementId(t *testing.T) {
 	}
 }
 
+func TestUserQuery(t *testing.T) {
+	if querymanStatus < statusReady {
+		t.Error("querymanager is not ready")
+		return
+	}
+
+	var count int
+	err := queryManager.QueryRow("SELECT 1 FROM DUAL").Scan(&count)
+	if err != nil {
+		t.Error(err.Error())
+		return
+	}
+
+	if count != 1 {
+		t.Errorf("invalid count %d", count)
+		return
+	}
+}
+
 
 func TestInsertBareParams(t *testing.T) {
 	setup()

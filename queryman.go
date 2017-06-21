@@ -91,14 +91,54 @@ func (man *QueryMan) prepare(query string) (*sql.Stmt, error) {
 func (man *QueryMan) find(id string)	(QueryStatement, error) {
 	stmt, ok := man.statementMap[strings.ToUpper(id)]
 	if !ok {
+		if isUserQuery(id) {
+			return buildUserQueryStatement(man, id)
+		}
 		return stmt, fmt.Errorf("not found Query statement for Id : %s", id)
 	}
 
 	return stmt, nil
 }
 
-func (man *QueryMan) Execute(id string, v ...interface{}) (sql.Result, error) {
-	stmt, err := man.find(id)
+func isUserQuery(query string) bool {
+	if strings.Index(query, " ") > 0 {
+		return true
+	}
+	if strings.Index(query, "\t") > 0 {
+		return true
+	}
+	if strings.Index(query, "\n") > 0 {
+		return true
+	}
+	if strings.Index(query, "\r") > 0 {
+		return true
+	}
+	return false
+}
+
+func buildUserQueryStatement(manager *QueryMan, query string)	(QueryStatement, error) {
+	stmt := QueryStatement{}
+	stmt.sqlTyp = getDeclareSqlType(query)
+	stmt.Id = query
+	stmt.Query = query
+
+	err := manager.registStatement(stmt)
+	return stmt, err
+}
+
+func getDeclareSqlType(query string) declareSqlType {
+	prefix := strings.Trim(query, " \r\n\t")[:10]
+	prefix = strings.ToUpper(prefix)
+	if strings.HasPrefix(prefix, "SELECT") {
+		return sqlTypeSelect
+	} else if strings.HasPrefix(prefix, "INSERT") {
+		return sqlTypeInsert
+	}
+	return sqlTypeUpdate
+}
+
+func (man *QueryMan) Execute(stmtIdOrUserQuery string, v ...interface{}) (sql.Result, error) {
+	stmt, err := man.find(stmtIdOrUserQuery)
 	if err != nil {
 		return nil, err
 	}
@@ -111,8 +151,8 @@ func (man *QueryMan) Execute(id string, v ...interface{}) (sql.Result, error) {
 }
 
 
-func (man *QueryMan) Query(id string, v ...interface{}) *QueryResult {
-	stmt, err := man.find(id)
+func (man *QueryMan) Query(stmtIdOrUserQuery string, v ...interface{}) *QueryResult {
+	stmt, err := man.find(stmtIdOrUserQuery)
 	if err != nil {
 		return newQueryResultError(err)
 	}
@@ -126,8 +166,8 @@ func (man *QueryMan) Query(id string, v ...interface{}) *QueryResult {
 	return queryedRow
 }
 
-func (man *QueryMan) QueryRow(id string, v ...interface{}) *QueryRowResult {
-	stmt, err := man.find(id)
+func (man *QueryMan) QueryRow(stmtIdOrUserQuery string, v ...interface{}) *QueryRowResult {
+	stmt, err := man.find(stmtIdOrUserQuery)
 	if err != nil {
 		return newQueryRowResultError(err)
 	}

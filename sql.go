@@ -142,8 +142,7 @@ func execWithList(sqlProxy SqlProxy, stmt QueryStatement, args []interface{}) (s
 func execWithNestedList(sqlProxy SqlProxy, stmt QueryStatement, args []interface{}) (sql.Result, error) {
 	executed, result, err := doExecWithNestedList(sqlProxy, stmt, args)
 	if err != nil && err == driver.ErrBadConn {
-		args = args[executed:]
-		_, result, err = doExecWithNestedList(sqlProxy, stmt, args)
+		_, result, err = doExecWithNestedList(sqlProxy, stmt, args[executed:])
 	}
 	return result, err
 }
@@ -170,13 +169,6 @@ func doExecWithNestedList(sqlProxy SqlProxy, stmt QueryStatement, args []interfa
 		passing := flattenToList(v)
 		res, err := pstmt.Exec(passing...)
 		if err != nil {
-			log.Warn("fail to pstmt.Exec : [%v] %s\n", err, err.Error())
-			if err == driver.ErrBadConn {
-				log.Warn("matched driver.ErrBadConn")
-			}
-			if err.Error() == driver.ErrBadConn.Error() {
-				log.Warn("matched driver.ErrBadConn.Error()")
-			}
 			return i, nil, err
 		}
 		affectedCount, _ := res.RowsAffected()

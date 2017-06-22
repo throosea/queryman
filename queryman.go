@@ -29,6 +29,7 @@ import (
 	"fmt"
 	"runtime"
 	"database/sql/driver"
+	"throosea.com/log"
 )
 
 type QueryNormalizer interface {
@@ -116,7 +117,13 @@ func (man *QueryMan) Execute(id string, v ...interface{}) (sql.Result, error) {
 		return nil, errExecutionInvalidSqlType
 	}
 
-	return execute(man, stmt, v...)
+	res, err := execute(man, stmt, v...)
+	if err != nil {
+		log.Warn("fail Execute", err)
+	}
+
+	return res,err
+	//return execute(man, stmt, v...)
 }
 
 

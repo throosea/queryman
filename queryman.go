@@ -28,6 +28,7 @@ import (
 	"strings"
 	"fmt"
 	"runtime"
+	"database/sql/driver"
 )
 
 type QueryNormalizer interface {
@@ -73,7 +74,15 @@ func (man *QueryMan) Close() error {
 }
 
 func (man *QueryMan) exec(query string, args ...interface{}) (sql.Result, error) {
-	return man.db.Exec(query, args...)
+	res, err := man.db.Exec(query, args...)
+	if err != nil {
+		fmt.Printf("exec err [%v] %s\n", err, err.Error())
+		if err == driver.ErrBadConn {
+			fmt.Println("driver.ErrBadConn")
+		}
+	}
+	return res, err
+	//return man.db.Exec(query, args...)
 }
 
 func (man *QueryMan) query(query string, args ...interface{}) (*sql.Rows, error) {

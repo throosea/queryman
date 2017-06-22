@@ -99,7 +99,7 @@ func execWithMap(sqlProxy SqlProxy, stmt QueryStatement, m map[string]interface{
 	for _,v := range stmt.columnMention {
 		found, ok := m[v]
 		if !ok {
-			return nil, fmt.Errorf("not found \"%s\" from parameter values", v)
+			return nil, fmt.Errorf("execWithMap : not found \"%s\" from parameter values", v)
 		}
 		param = append(param, found)
 	}
@@ -281,7 +281,7 @@ func doExecWithStructList(sqlProxy SqlProxy, stmt QueryStatement, args []interfa
 		for _,v := range stmt.columnMention {
 			found, ok := m[v]
 			if !ok {
-				return i, nil, fmt.Errorf("not found \"%s\" from parameter values", v)
+				return i, nil, fmt.Errorf("doExecWithStructList : not found \"%s\" from parameter values", v)
 			}
 			param = append(param, found)
 		}
@@ -445,7 +445,7 @@ func queryWithMap(sqlProxy SqlProxy, stmt QueryStatement, m map[string]interface
 	for _,v := range stmt.columnMention {
 		found, ok := m[v]
 		if !ok {
-			return newQueryResultError(fmt.Errorf("not found \"%s\" from parameter values", v))
+			return newQueryResultError(fmt.Errorf("queryWithMap : not found \"%s\" from parameter values", v))
 		}
 		param = append(param, found)
 	}

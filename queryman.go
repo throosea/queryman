@@ -28,7 +28,6 @@ import (
 	"strings"
 	"fmt"
 	"runtime"
-	"database/sql/driver"
 )
 
 type QueryNormalizer interface {

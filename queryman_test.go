@@ -171,6 +171,7 @@ func clearPreviousXmlFiles(path string, fileset string) {
 func TestConnection(t *testing.T) {
 	path := filepath.Dir(xmlFile)
 	querymanPref := NewQuerymanPreference(path, sourceName)
+	querymanPref.ConnMaxLifetime = time.Duration(time.Second * 10)
 	querymanPref.Fileset = xmlFilePrefix + "*.xml"
 	man, err := NewQueryman(querymanPref)
 	if err != nil {

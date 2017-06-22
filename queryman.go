@@ -29,7 +29,6 @@ import (
 	"fmt"
 	"runtime"
 	"database/sql/driver"
-	"throosea.com/log"
 )
 
 type QueryNormalizer interface {
@@ -75,15 +74,7 @@ func (man *QueryMan) Close() error {
 }
 
 func (man *QueryMan) exec(query string, args ...interface{}) (sql.Result, error) {
-	res, err := man.db.Exec(query, args...)
-	if err != nil {
-		fmt.Printf("exec err [%v] %s\n", err, err.Error())
-		if err == driver.ErrBadConn {
-			fmt.Println("driver.ErrBadConn")
-		}
-	}
-	return res, err
-	//return man.db.Exec(query, args...)
+	return man.db.Exec(query, args...)
 }
 
 func (man *QueryMan) query(query string, args ...interface{}) (*sql.Rows, error) {
@@ -117,13 +108,7 @@ func (man *QueryMan) Execute(id string, v ...interface{}) (sql.Result, error) {
 		return nil, errExecutionInvalidSqlType
 	}
 
-	res, err := execute(man, stmt, v...)
-	if err != nil {
-		log.Warn("fail Execute", err)
-	}
-
-	return res,err
-	//return execute(man, stmt, v...)
+	return execute(man, stmt, v...)
 }
 
 

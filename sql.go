@@ -27,6 +27,8 @@ import (
 	"database/sql"
 	"fmt"
 	"reflect"
+	"throosea.com/log"
+	"database/sql/driver"
 )
 
 func execute(sqlProxy SqlProxy, stmt QueryStatement, v ...interface{}) (result sql.Result, err error) {
@@ -159,6 +161,13 @@ func execWithNestedList(sqlProxy SqlProxy, stmt QueryStatement, args []interface
 		passing := flattenToList(v)
 		res, err := pstmt.Exec(passing...)
 		if err != nil {
+			log.Warn("fail to pstmt.Exec : [%v] %s\n", err, err.Error())
+			if err == driver.ErrBadConn {
+				log.Warn("matched driver.ErrBadConn")
+			}
+			if err.Error() == driver.ErrBadConn.Error() {
+				log.Warn("matched driver.ErrBadConn.Error()")
+			}
 			return nil, err
 		}
 		affectedCount, _ := res.RowsAffected()

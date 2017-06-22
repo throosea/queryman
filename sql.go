@@ -140,24 +140,33 @@ func execWithList(sqlProxy SqlProxy, stmt QueryStatement, args []interface{}) (s
 
 
 func execWithNestedList(sqlProxy SqlProxy, stmt QueryStatement, args []interface{}) (sql.Result, error) {
+	executed, result, err := doExecWithNestedList(sqlProxy, stmt, args)
+	if err != nil && err == driver.ErrBadConn {
+		args = args[executed:]
+		_, result, err = doExecWithNestedList(sqlProxy, stmt, args)
+	}
+	return result, err
+}
+
+func doExecWithNestedList(sqlProxy SqlProxy, stmt QueryStatement, args []interface{}) (int, sql.Result, error) {
 	// all data in the list should be 'slice' or 'array'
 	for i, v := range args {
 		if reflect.TypeOf(v).Kind() != reflect.Slice && reflect.TypeOf(v).Kind() != reflect.Array {
-			return nil, fmt.Errorf("nested listing structure should have slice type data only. %d=%s", i, reflect.TypeOf(v).String())
+			return 0, nil, fmt.Errorf("nested listing structure should have slice type data only. %d=%s", i, reflect.TypeOf(v).String())
 		}
 		if len(stmt.columnMention) > reflect.ValueOf(v).Len() {
-			return nil, fmt.Errorf("binding parameter count mismatch. defined=%d, args[%d]=%d", len(stmt.columnMention), i, reflect.ValueOf(v).Len())
+			return 0, nil, fmt.Errorf("binding parameter count mismatch. defined=%d, args[%d]=%d", len(stmt.columnMention), i, reflect.ValueOf(v).Len())
 		}
 	}
 
 	pstmt, err := sqlProxy.prepare(stmt.Query)
 	if err != nil {
-		return nil, err
+		return 0, nil, err
 	}
 	defer pstmt.Close()
 
 	result := ExecMultiResult{}
-	for _, v := range args {
+	for i, v := range args {
 		passing := flattenToList(v)
 		res, err := pstmt.Exec(passing...)
 		if err != nil {
@@ -168,7 +177,7 @@ func execWithNestedList(sqlProxy SqlProxy, stmt QueryStatement, args []interface
 			if err.Error() == driver.ErrBadConn.Error() {
 				log.Warn("matched driver.ErrBadConn.Error()")
 			}
-			return nil, err
+			return i, nil, err
 		}
 		affectedCount, _ := res.RowsAffected()
 		result.rowAffected += affectedCount
@@ -176,13 +185,13 @@ func execWithNestedList(sqlProxy SqlProxy, stmt QueryStatement, args []interface
 		if stmt.sqlTyp == sqlTypeInsert {
 			id, err := res.LastInsertId()
 			if err != nil {
-				return nil, fmt.Errorf("fail to get last inserted id : %s", err.Error())
+				return i, nil, fmt.Errorf("fail to get last inserted id : %s", err.Error())
 			}
 			(&result).addInsertId(id)
 		}
 	}
 
-	return result, nil
+	return len(args), result, nil
 }
 
 func execWithNestedMap(sqlProxy SqlProxy, stmt QueryStatement, args []interface{}) (sql.Result, error) {

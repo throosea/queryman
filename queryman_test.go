@@ -95,10 +95,10 @@ func TestMain(m *testing.M) {
 }
 
 func prepareSourceName() {
-	dbName := flag.String("db", "local", "database name")
-	userName := flag.String("user", "local", "Username")
+	dbName := flag.String("db", "mmate", "database name")
+	userName := flag.String("user", "mmate", "Username")
 	password := flag.String("password", "angel", "passsword")
-	host := flag.String("host", "10.211.55.7:3306", "ip and port")
+	host := flag.String("host", "10.211.55.8:3306", "ip and port")
 
 	flag.Parse()
 
@@ -171,6 +171,7 @@ func clearPreviousXmlFiles(path string, fileset string) {
 func TestConnection(t *testing.T) {
 	path := filepath.Dir(xmlFile)
 	querymanPref := NewQuerymanPreference(path, sourceName)
+	querymanPref.ConnMaxLifetime = time.Duration(time.Second * 10)
 	querymanPref.Fileset = xmlFilePrefix + "*.xml"
 	man, err := NewQueryman(querymanPref)
 	if err != nil {
@@ -232,6 +233,41 @@ func TestQueryUnknownStatementId(t *testing.T) {
 	_, err := queryManager.Execute("UnknownSomethingStatement")
 	if err == nil {
 		t.Error("queryManager report statement found")
+	}
+}
+
+func TestUserQuery(t *testing.T) {
+	if querymanStatus < statusReady {
+		t.Error("querymanager is not ready")
+		return
+	}
+
+	// insert sample
+	_, err := queryManager.Execute(sqlInsertCity, "bare param", 42, true, 40.0, time.Now(), nil)
+	if err != nil {
+		t.Error(err.Error())
+		return
+	}
+
+	userQuery := "SELECT * FROM CITY WHERE NAME like {Name}"
+	city := &City{}
+	result := queryManager.Query(userQuery, "bare param") // time is null
+	if result.GetError() != nil {
+		t.Error(result.GetError())
+		return
+	}
+
+	defer result.Close()
+
+	if !result.Next() {
+		t.Error(errNoMoreData)
+		return
+	}
+
+	err = result.Scan(city)
+	if err != nil {
+		t.Errorf("fail to scan : %s", err.Error())
+		return
 	}
 }
 
@@ -390,16 +426,16 @@ func TestInsertMap(t *testing.T) {
 }
 
 
-func TestInsertStringMap(t *testing.T) {
+func TestInsertNullableSlice(t *testing.T) {
 	setup()
 
-	args := make(map[string]string)
-	args["Name"] = "map name"
-	args["Age"] = "100"
-	args["IsMan"] = "true"
-	args["Percentage"] = "34.0"
-	args["CreateTime"] = time.Now().String()
-	args["UpdateTime"] = time.Now().String()
+	args := make([]interface{}, 0)
+	args = append(args, sql.NullString{String:"test_city"})
+	args = append(args, sql.NullInt64{})
+	args = append(args, sql.NullBool{})
+	args = append(args, sql.NullFloat64{})
+	args = append(args, time.Now())
+	args = append(args, nil)
 
 	result, err := queryManager.Execute(sqlInsertCity, args)
 	if err != nil {

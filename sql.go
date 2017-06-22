@@ -27,7 +27,6 @@ import (
 	"database/sql"
 	"fmt"
 	"reflect"
-	"throosea.com/log"
 	"database/sql/driver"
 )
 
@@ -187,41 +186,49 @@ func doExecWithNestedList(sqlProxy SqlProxy, stmt QueryStatement, args []interfa
 }
 
 func execWithNestedMap(sqlProxy SqlProxy, stmt QueryStatement, args []interface{}) (sql.Result, error) {
+	executed, result, err := doExecWithNestedMap(sqlProxy, stmt, args)
+	if err != nil && err == driver.ErrBadConn {
+		_, result, err = doExecWithNestedMap(sqlProxy, stmt, args[executed:])
+	}
+	return result, err
+}
+
+func doExecWithNestedMap(sqlProxy SqlProxy, stmt QueryStatement, args []interface{}) (int, sql.Result, error) {
 	// all data in the list should be 'map'
 	for i, v := range args {
 		if reflect.TypeOf(v).Kind() != reflect.Map {
-			return nil, fmt.Errorf("nested listing structure should have map type data only. %d=%s", i, reflect.TypeOf(v).String())
+			return 0, nil, fmt.Errorf("nested listing structure should have map type data only. %d=%s", i, reflect.TypeOf(v).String())
 		}
 		if len(stmt.columnMention) > reflect.ValueOf(v).Len() {
-			return nil, fmt.Errorf("binding parameter count mismatch. defined=%d, args[%d]=%d", len(stmt.columnMention), i, reflect.ValueOf(v).Len())
+			return 0, nil, fmt.Errorf("binding parameter count mismatch. defined=%d, args[%d]=%d", len(stmt.columnMention), i, reflect.ValueOf(v).Len())
 		}
 	}
 
 	pstmt, err := sqlProxy.prepare(stmt.Query)
 	if err != nil {
-		return nil, err
+		return 0, nil, err
 	}
 	defer pstmt.Close()
 
 	result := ExecMultiResult{}
-	for _, v := range args {
+	for i, v := range args {
 		m, ok := v.(map[string]interface{})
 		if !ok {
-			return nil, errInvalidMapType
+			return i, nil, errInvalidMapType
 		}
 
 		param := make([]interface{}, 0)
 		for _,v2 := range stmt.columnMention {
 			found, ok := m[v2]
 			if !ok {
-				return nil, fmt.Errorf("not found \"%s\" from map", v)
+				return i, nil, fmt.Errorf("not found \"%s\" from map", v)
 			}
 			param = append(param, found)
 		}
 
 		res, err := pstmt.Exec(param...)
 		if err != nil {
-			return nil, err
+			return i, nil, err
 		}
 		affectedCount, _ := res.RowsAffected()
 		result.rowAffected += affectedCount
@@ -229,25 +236,33 @@ func execWithNestedMap(sqlProxy SqlProxy, stmt QueryStatement, args []interface{
 		if stmt.sqlTyp == sqlTypeInsert {
 			id, err := res.LastInsertId()
 			if err != nil {
-				return nil, fmt.Errorf("fail to get last inserted id : %s", err.Error())
+				return i, nil, fmt.Errorf("fail to get last inserted id : %s", err.Error())
 			}
 			(&result).addInsertId(id)
 		}
 	}
 
-	return result, nil
+	return len(args), result, nil
 }
 
 
 func execWithStructList(sqlProxy SqlProxy, stmt QueryStatement, args []interface{}) (sql.Result, error) {
+	executed, result, err := doExecWithStructList(sqlProxy, stmt, args)
+	if err != nil && err == driver.ErrBadConn {
+		_, result, err = doExecWithStructList(sqlProxy, stmt, args[executed:])
+	}
+	return result, err
+}
+
+func doExecWithStructList(sqlProxy SqlProxy, stmt QueryStatement, args []interface{}) (int, sql.Result, error) {
 	pstmt, err := sqlProxy.prepare(stmt.Query)
 	if err != nil {
-		return nil, err
+		return 0, nil, err
 	}
 	defer pstmt.Close()
 
 	result := ExecMultiResult{}
-	for _, v := range args {
+	for i, v := range args {
 		atype := reflect.TypeOf(v)
 		val := v
 
@@ -255,7 +270,7 @@ func execWithStructList(sqlProxy SqlProxy, stmt QueryStatement, args []interface
 		if atype.Kind() == reflect.Ptr {
 			atype = atype.Elem()
 			if reflect.ValueOf(v).IsNil() {
-				return nil, errNilPtr
+				return i, nil, errNilPtr
 			}
 			val = reflect.ValueOf(v).Elem().Interface()
 		}
@@ -266,14 +281,14 @@ func execWithStructList(sqlProxy SqlProxy, stmt QueryStatement, args []interface
 		for _,v := range stmt.columnMention {
 			found, ok := m[v]
 			if !ok {
-				return nil, fmt.Errorf("not found \"%s\" from parameter values", v)
+				return i, nil, fmt.Errorf("not found \"%s\" from parameter values", v)
 			}
 			param = append(param, found)
 		}
 
 		res, err := pstmt.Exec(param...)
 		if err != nil {
-			return nil, err
+			return i, nil, err
 		}
 		affectedCount, _ := res.RowsAffected()
 		result.rowAffected += affectedCount
@@ -281,13 +296,13 @@ func execWithStructList(sqlProxy SqlProxy, stmt QueryStatement, args []interface
 		if stmt.sqlTyp == sqlTypeInsert {
 			id, err := res.LastInsertId()
 			if err != nil {
-				return nil, fmt.Errorf("fail to get last inserted id : %s", err.Error())
+				return i, nil, fmt.Errorf("fail to get last inserted id : %s", err.Error())
 			}
 			(&result).addInsertId(id)
 		}
 	}
 
-	return result, nil
+	return len(args), result, nil
 }
 
 func flattenToList(v interface{}) []interface{} {

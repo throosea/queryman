@@ -161,10 +161,10 @@ func doExecWithNestedList(sqlProxy SqlProxy, stmt QueryStatement, args []interfa
 	// all data in the list should be 'slice' or 'array'
 	for i, v := range args {
 		if reflect.TypeOf(v).Kind() != reflect.Slice && reflect.TypeOf(v).Kind() != reflect.Array {
-			return 0, nil, fmt.Errorf("nested listing structure should have slice type data only. %d=%s", i, reflect.TypeOf(v).String())
+			return 0, ExecMultiResult{}, fmt.Errorf("nested listing structure should have slice type data only. %d=%s", i, reflect.TypeOf(v).String())
 		}
 		if len(stmt.columnMention) > reflect.ValueOf(v).Len() {
-			return 0, nil, fmt.Errorf("binding parameter count mismatch. defined=%d, args[%d]=%d", len(stmt.columnMention), i, reflect.ValueOf(v).Len())
+			return 0, ExecMultiResult{}, fmt.Errorf("binding parameter count mismatch. defined=%d, args[%d]=%d", len(stmt.columnMention), i, reflect.ValueOf(v).Len())
 		}
 	}
 
@@ -213,10 +213,10 @@ func doExecWithNestedMap(sqlProxy SqlProxy, stmt QueryStatement, args []interfac
 	// all data in the list should be 'map'
 	for i, v := range args {
 		if reflect.TypeOf(v).Kind() != reflect.Map {
-			return 0, nil, fmt.Errorf("nested listing structure should have map type data only. %d=%s", i, reflect.TypeOf(v).String())
+			return 0, ExecMultiResult{}, fmt.Errorf("nested listing structure should have map type data only. %d=%s", i, reflect.TypeOf(v).String())
 		}
 		if len(stmt.columnMention) > reflect.ValueOf(v).Len() {
-			return 0, nil, fmt.Errorf("binding parameter count mismatch. defined=%d, args[%d]=%d", len(stmt.columnMention), i, reflect.ValueOf(v).Len())
+			return 0, ExecMultiResult{}, fmt.Errorf("binding parameter count mismatch. defined=%d, args[%d]=%d", len(stmt.columnMention), i, reflect.ValueOf(v).Len())
 		}
 	}
 

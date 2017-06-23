@@ -278,7 +278,7 @@ func execWithStructList(sqlProxy SqlProxy, stmt QueryStatement, args []interface
 func doExecWithStructList(sqlProxy SqlProxy, stmt QueryStatement, args []interface{}) (int, ExecMultiResult, error) {
 	pstmt, err := sqlProxy.prepare(stmt.Query)
 	if err != nil {
-		return 0, nil, err
+		return 0, ExecMultiResult{}, err
 	}
 	defer pstmt.Close()
 

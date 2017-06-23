@@ -170,7 +170,7 @@ func doExecWithNestedList(sqlProxy SqlProxy, stmt QueryStatement, args []interfa
 
 	pstmt, err := sqlProxy.prepare(stmt.Query)
 	if err != nil {
-		return 0, nil, err
+		return 0, ExecMultiResult{}, err
 	}
 	defer pstmt.Close()
 
@@ -179,7 +179,7 @@ func doExecWithNestedList(sqlProxy SqlProxy, stmt QueryStatement, args []interfa
 		passing := flattenToList(v)
 		res, err := pstmt.Exec(passing...)
 		if err != nil {
-			return i, nil, err
+			return i, result, err
 		}
 		affectedCount, _ := res.RowsAffected()
 		result.rowAffected += affectedCount
@@ -187,7 +187,7 @@ func doExecWithNestedList(sqlProxy SqlProxy, stmt QueryStatement, args []interfa
 		if stmt.sqlTyp == sqlTypeInsert {
 			id, err := res.LastInsertId()
 			if err != nil {
-				return i, nil, fmt.Errorf("fail to get last inserted id : %s", err.Error())
+				return i, result, fmt.Errorf("fail to get last inserted id : %s", err.Error())
 			}
 			(&result).addInsertId(id)
 		}
@@ -222,7 +222,7 @@ func doExecWithNestedMap(sqlProxy SqlProxy, stmt QueryStatement, args []interfac
 
 	pstmt, err := sqlProxy.prepare(stmt.Query)
 	if err != nil {
-		return 0, nil, err
+		return 0, ExecMultiResult{}, err
 	}
 	defer pstmt.Close()
 
@@ -230,21 +230,21 @@ func doExecWithNestedMap(sqlProxy SqlProxy, stmt QueryStatement, args []interfac
 	for i, v := range args {
 		m, ok := v.(map[string]interface{})
 		if !ok {
-			return i, nil, errInvalidMapType
+			return i, result, errInvalidMapType
 		}
 
 		param := make([]interface{}, 0)
 		for _,v2 := range stmt.columnMention {
 			found, ok := m[v2]
 			if !ok {
-				return i, nil, fmt.Errorf("not found \"%s\" from map", v)
+				return i, result, fmt.Errorf("not found \"%s\" from map", v)
 			}
 			param = append(param, found)
 		}
 
 		res, err := pstmt.Exec(param...)
 		if err != nil {
-			return i, nil, err
+			return i, result, err
 		}
 		affectedCount, _ := res.RowsAffected()
 		result.rowAffected += affectedCount
@@ -252,7 +252,7 @@ func doExecWithNestedMap(sqlProxy SqlProxy, stmt QueryStatement, args []interfac
 		if stmt.sqlTyp == sqlTypeInsert {
 			id, err := res.LastInsertId()
 			if err != nil {
-				return i, nil, fmt.Errorf("fail to get last inserted id : %s", err.Error())
+				return i, result, fmt.Errorf("fail to get last inserted id : %s", err.Error())
 			}
 			(&result).addInsertId(id)
 		}
@@ -291,7 +291,7 @@ func doExecWithStructList(sqlProxy SqlProxy, stmt QueryStatement, args []interfa
 		if atype.Kind() == reflect.Ptr {
 			atype = atype.Elem()
 			if reflect.ValueOf(v).IsNil() {
-				return i, nil, errNilPtr
+				return i, result, errNilPtr
 			}
 			val = reflect.ValueOf(v).Elem().Interface()
 		}
@@ -302,14 +302,14 @@ func doExecWithStructList(sqlProxy SqlProxy, stmt QueryStatement, args []interfa
 		for _,v := range stmt.columnMention {
 			found, ok := m[v]
 			if !ok {
-				return i, nil, fmt.Errorf("doExecWithStructList : not found \"%s\" from parameter values", v)
+				return i, result, fmt.Errorf("doExecWithStructList : not found \"%s\" from parameter values", v)
 			}
 			param = append(param, found)
 		}
 
 		res, err := pstmt.Exec(param...)
 		if err != nil {
-			return i, nil, err
+			return i, result, err
 		}
 		affectedCount, _ := res.RowsAffected()
 		result.rowAffected += affectedCount
@@ -317,7 +317,7 @@ func doExecWithStructList(sqlProxy SqlProxy, stmt QueryStatement, args []interfa
 		if stmt.sqlTyp == sqlTypeInsert {
 			id, err := res.LastInsertId()
 			if err != nil {
-				return i, nil, fmt.Errorf("fail to get last inserted id : %s", err.Error())
+				return i, result, fmt.Errorf("fail to get last inserted id : %s", err.Error())
 			}
 			(&result).addInsertId(id)
 		}

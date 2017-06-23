@@ -147,12 +147,17 @@ func execWithList(sqlProxy SqlProxy, stmt QueryStatement, args []interface{}) (s
 func execWithNestedList(sqlProxy SqlProxy, stmt QueryStatement, args []interface{}) (sql.Result, error) {
 	executed, result, err := doExecWithNestedList(sqlProxy, stmt, args)
 	if err != nil && err == driver.ErrBadConn {
-		_, result, err = doExecWithNestedList(sqlProxy, stmt, args[executed:])
+		var nextResult ExecMultiResult
+		_, nextResult, err = doExecWithNestedList(sqlProxy, stmt, args[executed:])
+		if err == nil {
+			result.idList = append(result.idList, nextResult.idList...)
+			result.rowAffected += nextResult.rowAffected
+		}
 	}
 	return result, err
 }
 
-func doExecWithNestedList(sqlProxy SqlProxy, stmt QueryStatement, args []interface{}) (int, sql.Result, error) {
+func doExecWithNestedList(sqlProxy SqlProxy, stmt QueryStatement, args []interface{}) (int, ExecMultiResult, error) {
 	// all data in the list should be 'slice' or 'array'
 	for i, v := range args {
 		if reflect.TypeOf(v).Kind() != reflect.Slice && reflect.TypeOf(v).Kind() != reflect.Array {
@@ -194,12 +199,17 @@ func doExecWithNestedList(sqlProxy SqlProxy, stmt QueryStatement, args []interfa
 func execWithNestedMap(sqlProxy SqlProxy, stmt QueryStatement, args []interface{}) (sql.Result, error) {
 	executed, result, err := doExecWithNestedMap(sqlProxy, stmt, args)
 	if err != nil && err == driver.ErrBadConn {
-		_, result, err = doExecWithNestedMap(sqlProxy, stmt, args[executed:])
+		var nextResult ExecMultiResult
+		_, nextResult, err = doExecWithNestedMap(sqlProxy, stmt, args[executed:])
+		if err == nil {
+			result.idList = append(result.idList, nextResult.idList...)
+			result.rowAffected += nextResult.rowAffected
+		}
 	}
 	return result, err
 }
 
-func doExecWithNestedMap(sqlProxy SqlProxy, stmt QueryStatement, args []interface{}) (int, sql.Result, error) {
+func doExecWithNestedMap(sqlProxy SqlProxy, stmt QueryStatement, args []interface{}) (int, ExecMultiResult, error) {
 	// all data in the list should be 'map'
 	for i, v := range args {
 		if reflect.TypeOf(v).Kind() != reflect.Map {
@@ -255,12 +265,17 @@ func doExecWithNestedMap(sqlProxy SqlProxy, stmt QueryStatement, args []interfac
 func execWithStructList(sqlProxy SqlProxy, stmt QueryStatement, args []interface{}) (sql.Result, error) {
 	executed, result, err := doExecWithStructList(sqlProxy, stmt, args)
 	if err != nil && err == driver.ErrBadConn {
-		_, result, err = doExecWithStructList(sqlProxy, stmt, args[executed:])
+		var nextResult ExecMultiResult
+		_, nextResult, err = doExecWithStructList(sqlProxy, stmt, args[executed:])
+		if err == nil {
+			result.idList = append(result.idList, nextResult.idList...)
+			result.rowAffected += nextResult.rowAffected
+		}
 	}
 	return result, err
 }
 
-func doExecWithStructList(sqlProxy SqlProxy, stmt QueryStatement, args []interface{}) (int, sql.Result, error) {
+func doExecWithStructList(sqlProxy SqlProxy, stmt QueryStatement, args []interface{}) (int, ExecMultiResult, error) {
 	pstmt, err := sqlProxy.prepare(stmt.Query)
 	if err != nil {
 		return 0, nil, err

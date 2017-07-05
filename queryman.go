@@ -134,6 +134,8 @@ func getDeclareSqlType(query string) declareSqlType {
 		return sqlTypeSelect
 	} else if strings.HasPrefix(prefix, "INSERT") {
 		return sqlTypeInsert
+	} else if strings.HasPrefix(prefix, "DELETE") {
+		return sqlTypeDelete
 	}
 	return sqlTypeUpdate
 }
@@ -144,7 +146,7 @@ func (man *QueryMan) Execute(stmtIdOrUserQuery string, v ...interface{}) (sql.Re
 		return nil, err
 	}
 
-	if stmt.sqlTyp != sqlTypeInsert && stmt.sqlTyp != sqlTypeUpdate {
+	if stmt.sqlTyp == sqlTypeSelect  {
 		return nil, errExecutionInvalidSqlType
 	}
 

@@ -72,7 +72,7 @@ func (t *DBTransaction) Execute(id string, v ...interface{}) (sql.Result, error)
 		return nil, err
 	}
 
-	if stmt.sqlTyp != sqlTypeInsert && stmt.sqlTyp != sqlTypeUpdate {
+	if stmt.sqlTyp == sqlTypeSelect {
 		return nil, errExecutionInvalidSqlType
 	}
 

@@ -137,6 +137,14 @@ func loadXmlFile(manager *QueryMan, filePath string, fileSet string) error {
 			}
 		}
 
+		for _, v := range userQuery.SqlDelete {
+			v.sqlTyp = sqlTypeDelete
+			err = manager.registStatement(v)
+			if err != nil {
+				return err
+			}
+		}
+
 		for _, v := range userQuery.SqlSelect {
 			v.sqlTyp = sqlTypeSelect
 			err = manager.registStatement(v)

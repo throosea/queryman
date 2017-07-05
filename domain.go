@@ -32,6 +32,7 @@ import (
 const (
 	sqlTypeInsert = iota
 	sqlTypeUpdate
+	sqlTypeDelete
 	sqlTypeSelect
 )
 
@@ -73,5 +74,6 @@ type UserQuery struct {
 	XMLName 	xml.Name 			`xml:"query"`
 	SqlInsert  []QueryStatement    `xml:"insert"`
 	SqlUpdate  []QueryStatement    `xml:"update"`
+	SqlDelete  []QueryStatement    `xml:"delete"`
 	SqlSelect  []QueryStatement    `xml:"select"`
 }

@@ -406,7 +406,9 @@ func queryMultiRow(sqlProxy SqlProxy, stmt QueryStatement, v ...interface{}) (qu
 	case reflect.Slice, reflect.Array :
 		return queryList(sqlProxy, val, stmt)
 	case reflect.Struct :
-		return queryWithObject(sqlProxy, stmt, val)
+		if _, is := val.(driver.Valuer); !is {
+			return queryWithObject(sqlProxy, stmt, val)
+		}
 	case reflect.Map :
 		return queryMap(sqlProxy, val, stmt)
 	}

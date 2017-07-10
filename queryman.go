@@ -180,9 +180,14 @@ func (man *QueryMan) QueryRow(stmtIdOrUserQuery string, v ...interface{}) *Query
 	}
 
 	queryResult := queryMultiRow(man, stmt, v...)
-	queryRowResult := newQueryRowResult(queryResult.pstmt, queryResult.rows)
-	queryRowResult.fieldNameConverter = man.fieldNameConverter
 
+	var queryRowResult *QueryRowResult
+	if queryResult.err != nil {
+		queryRowResult = newQueryRowResultError(queryResult.err)
+	} else {
+		queryRowResult = newQueryRowResult(queryResult.pstmt, queryResult.rows)
+	}
+	queryRowResult.fieldNameConverter = man.fieldNameConverter
 	return queryRowResult
 }
 

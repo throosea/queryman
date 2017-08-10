@@ -63,7 +63,7 @@ func (t *DBTransaction) queryRow(query string, args ...interface{}) *sql.Row {
 }
 
 func (t *DBTransaction) prepare(query string) (*sql.Stmt, error) {
-	return t.prepare(query)
+	return t.tx.Prepare(query)
 }
 
 func (t *DBTransaction) Execute(id string, v ...interface{}) (sql.Result, error) {

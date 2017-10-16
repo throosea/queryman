@@ -91,9 +91,9 @@ func (man *QueryMan) prepare(query string) (*sql.Stmt, error) {
 func (man *QueryMan) find(id string)	(QueryStatement, error) {
 	stmt, ok := man.statementMap[strings.ToUpper(id)]
 	if !ok {
-		if isUserQuery(id) {
-			return buildUserQueryStatement(man, id)
-		}
+		//if isUserQuery(id) {
+		//	return buildUserQueryStatement(man, id)
+		//}
 		return stmt, fmt.Errorf("not found Query statement for Id : %s", id)
 	}
 
@@ -140,7 +140,13 @@ func getDeclareSqlType(query string) declareSqlType {
 	return sqlTypeUpdate
 }
 
-func (man *QueryMan) Execute(stmtIdOrUserQuery string, v ...interface{}) (sql.Result, error) {
+func (man *QueryMan) Execute(v ...interface{}) (sql.Result, error) {
+	pc, _, _, _ := runtime.Caller(1)
+	funcName := findFunctionName(pc)
+	return man.ExecuteWithStmt(funcName, v...)
+}
+
+func (man *QueryMan) ExecuteWithStmt(stmtIdOrUserQuery string, v ...interface{}) (sql.Result, error) {
 	stmt, err := man.find(stmtIdOrUserQuery)
 	if err != nil {
 		return nil, err
@@ -153,8 +159,13 @@ func (man *QueryMan) Execute(stmtIdOrUserQuery string, v ...interface{}) (sql.Re
 	return execute(man, stmt, v...)
 }
 
+func (man *QueryMan) Query(v ...interface{}) *QueryResult {
+	pc, _, _, _ := runtime.Caller(1)
+	funcName := findFunctionName(pc)
+	return man.QueryWithStmt(funcName, v...)
+}
 
-func (man *QueryMan) Query(stmtIdOrUserQuery string, v ...interface{}) *QueryResult {
+func (man *QueryMan) QueryWithStmt(stmtIdOrUserQuery string, v ...interface{}) *QueryResult {
 	stmt, err := man.find(stmtIdOrUserQuery)
 	if err != nil {
 		return newQueryResultError(err)
@@ -169,7 +180,14 @@ func (man *QueryMan) Query(stmtIdOrUserQuery string, v ...interface{}) *QueryRes
 	return queryedRow
 }
 
-func (man *QueryMan) QueryRow(stmtIdOrUserQuery string, v ...interface{}) *QueryRowResult {
+func (man *QueryMan) QueryRow(v ...interface{}) *QueryRowResult {
+	pc, _, _, _ := runtime.Caller(1)
+	funcName := findFunctionName(pc)
+	return man.QueryRowWithStmt(funcName, v...)
+}
+
+
+func (man *QueryMan) QueryRowWithStmt(stmtIdOrUserQuery string, v ...interface{}) *QueryRowResult {
 	stmt, err := man.find(stmtIdOrUserQuery)
 	if err != nil {
 		return newQueryRowResultError(err)
@@ -206,3 +224,12 @@ func closeTransaction(tx *sql.Tx) {
 	tx.Commit()
 }
 
+
+func findFunctionName(pc uintptr) string {
+	var funcName = runtime.FuncForPC(pc).Name()
+	var found = strings.LastIndexByte(funcName, '.')
+	if found < 0 {
+		return funcName
+	}
+	return funcName[found+1:]
+}

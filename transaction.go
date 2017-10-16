@@ -25,6 +25,7 @@ package queryman
 
 import (
 	"database/sql"
+	"runtime"
 )
 
 type DBTransaction struct {
@@ -66,7 +67,13 @@ func (t *DBTransaction) prepare(query string) (*sql.Stmt, error) {
 	return t.tx.Prepare(query)
 }
 
-func (t *DBTransaction) Execute(id string, v ...interface{}) (sql.Result, error) {
+func (t *DBTransaction) Execute(v ...interface{}) (sql.Result, error) {
+	pc, _, _, _ := runtime.Caller(1)
+	funcName := findFunctionName(pc)
+	return t.ExecuteWithStmt(funcName, v...)
+}
+
+func (t *DBTransaction) ExecuteWithStmt(id string, v ...interface{}) (sql.Result, error) {
 	stmt, err := t.queryFinder.find(id)
 	if err != nil {
 		return nil, err
@@ -79,8 +86,13 @@ func (t *DBTransaction) Execute(id string, v ...interface{}) (sql.Result, error)
 	return execute(t, stmt, v...)
 }
 
+func (t *DBTransaction) Query(v ...interface{}) *QueryResult {
+	pc, _, _, _ := runtime.Caller(1)
+	funcName := findFunctionName(pc)
+	return t.QueryWithStmt(funcName, v...)
+}
 
-func (t *DBTransaction) Query(id string, v ...interface{}) *QueryResult {
+func (t *DBTransaction) QueryWithStmt(id string, v ...interface{}) *QueryResult {
 	stmt, err := t.queryFinder.find(id)
 	if err != nil {
 		return newQueryResultError(err)
@@ -96,7 +108,13 @@ func (t *DBTransaction) Query(id string, v ...interface{}) *QueryResult {
 }
 
 
-func (t *DBTransaction) QueryRow(id string, v ...interface{}) *QueryRowResult {
+func (t *DBTransaction) QueryRow(v ...interface{}) *QueryRowResult {
+	pc, _, _, _ := runtime.Caller(1)
+	funcName := findFunctionName(pc)
+	return t.QueryRowWithStmt(funcName, v...)
+}
+
+func (t *DBTransaction) QueryRowWithStmt(id string, v ...interface{}) *QueryRowResult {
 	stmt, err := t.queryFinder.find(id)
 	if err != nil {
 		return newQueryRowResultError(err)

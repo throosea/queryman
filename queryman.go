@@ -153,7 +153,7 @@ func (man *QueryMan) Execute(stmtIdOrUserQuery string, v ...interface{}) (sql.Re
 
 
 func (man *QueryMan) Query(stmtIdOrUserQuery string, v ...interface{}) *QueryResult {
-	pc, _, _, _ := runtime.Caller(2)
+	pc, _, _, _ := runtime.Caller(1)
 	funcName := findFunctionName(pc)
 	fmt.Printf("funcName=[%s]\n", funcName)
 	stmt, err := man.find(stmtIdOrUserQuery)

@@ -91,9 +91,9 @@ func (man *QueryMan) prepare(query string) (*sql.Stmt, error) {
 func (man *QueryMan) find(id string)	(QueryStatement, error) {
 	stmt, ok := man.statementMap[strings.ToUpper(id)]
 	if !ok {
-		if isUserQuery(id) {
-			return buildUserQueryStatement(man, id)
-		}
+		//if isUserQuery(id) {
+		//	return buildUserQueryStatement(man, id)
+		//}
 		return stmt, fmt.Errorf("not found Query statement for Id : %s", id)
 	}
 
@@ -153,11 +153,27 @@ func (man *QueryMan) Execute(stmtIdOrUserQuery string, v ...interface{}) (sql.Re
 
 
 func (man *QueryMan) Query(stmtIdOrUserQuery string, v ...interface{}) *QueryResult {
+	pc, _, _, _ := runtime.Caller(2)
+	funcName := findFunctionName(pc)
+	fmt.Printf("funcName=[%s]\n", funcName)
 	stmt, err := man.find(stmtIdOrUserQuery)
 	if err != nil {
 		return newQueryResultError(err)
 	}
 
+	return man.doQuery(stmt, v...)
+}
+
+func (man *QueryMan) QueryWithStmt(stmtIdOrUserQuery string, v ...interface{}) *QueryResult {
+	stmt, err := man.find(stmtIdOrUserQuery)
+	if err != nil {
+		return newQueryResultError(err)
+	}
+
+	return man.doQuery(stmt, v...)
+}
+
+func (man *QueryMan) doQuery(stmt QueryStatement, v ...interface{}) *QueryResult {
 	if stmt.sqlTyp != sqlTypeSelect {
 		return newQueryResultError(errQueryInvalidSqlType)
 	}
@@ -198,4 +214,15 @@ func (man *QueryMan) Begin() (*DBTransaction, error) {
 func closeTransaction(tx *sql.Tx) {
 	tx.Commit()
 }
+
+
+func findFunctionName(pc uintptr) string {
+	var funcName = runtime.FuncForPC(pc).Name()
+	var found = strings.LastIndexByte(funcName, '.')
+	if found < 0 {
+		return funcName
+	}
+	return funcName[found+1:]
+}
+
 

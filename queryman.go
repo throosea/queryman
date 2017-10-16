@@ -138,7 +138,13 @@ func getDeclareSqlType(query string) declareSqlType {
 	return sqlTypeUpdate
 }
 
-func (man *QueryMan) Execute(stmtIdOrUserQuery string, v ...interface{}) (sql.Result, error) {
+func (man *QueryMan) Execute(v ...interface{}) (sql.Result, error) {
+	pc, _, _, _ := runtime.Caller(1)
+	funcName := findFunctionName(pc)
+	return man.ExecuteWithStmt(funcName, v...)
+}
+
+func (man *QueryMan) ExecuteWithStmt(stmtIdOrUserQuery string, v ...interface{}) (sql.Result, error) {
 	stmt, err := man.find(stmtIdOrUserQuery)
 	if err != nil {
 		return nil, err
@@ -151,17 +157,10 @@ func (man *QueryMan) Execute(stmtIdOrUserQuery string, v ...interface{}) (sql.Re
 	return execute(man, stmt, v...)
 }
 
-
-func (man *QueryMan) Query(stmtIdOrUserQuery string, v ...interface{}) *QueryResult {
+func (man *QueryMan) Query(v ...interface{}) *QueryResult {
 	pc, _, _, _ := runtime.Caller(1)
 	funcName := findFunctionName(pc)
-	fmt.Printf("funcName=[%s]\n", funcName)
-	stmt, err := man.find(stmtIdOrUserQuery)
-	if err != nil {
-		return newQueryResultError(err)
-	}
-
-	return man.doQuery(stmt, v...)
+	return man.QueryWithStmt(funcName, v...)
 }
 
 func (man *QueryMan) QueryWithStmt(stmtIdOrUserQuery string, v ...interface{}) *QueryResult {
@@ -170,10 +169,6 @@ func (man *QueryMan) QueryWithStmt(stmtIdOrUserQuery string, v ...interface{}) *
 		return newQueryResultError(err)
 	}
 
-	return man.doQuery(stmt, v...)
-}
-
-func (man *QueryMan) doQuery(stmt QueryStatement, v ...interface{}) *QueryResult {
 	if stmt.sqlTyp != sqlTypeSelect {
 		return newQueryResultError(errQueryInvalidSqlType)
 	}
@@ -183,7 +178,14 @@ func (man *QueryMan) doQuery(stmt QueryStatement, v ...interface{}) *QueryResult
 	return queryedRow
 }
 
-func (man *QueryMan) QueryRow(stmtIdOrUserQuery string, v ...interface{}) *QueryRowResult {
+func (man *QueryMan) QueryRow(v ...interface{}) *QueryRowResult {
+	pc, _, _, _ := runtime.Caller(1)
+	funcName := findFunctionName(pc)
+	return man.QueryRowWithStmt(funcName, v...)
+}
+
+
+func (man *QueryMan) QueryRowWithStmt(stmtIdOrUserQuery string, v ...interface{}) *QueryRowResult {
 	stmt, err := man.find(stmtIdOrUserQuery)
 	if err != nil {
 		return newQueryRowResultError(err)
@@ -224,5 +226,3 @@ func findFunctionName(pc uintptr) string {
 	}
 	return funcName[found+1:]
 }
-
-

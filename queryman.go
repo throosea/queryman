@@ -219,11 +219,10 @@ func (man *QueryMan) Begin() (*DBTransaction, error) {
 	return newTransaction(tx, man, man.fieldNameConverter), nil
 }
 
-
+// you have to commit before closing transaction
 func closeTransaction(tx *sql.Tx) {
-	tx.Commit()
+	tx.Rollback()
 }
-
 
 func findFunctionName(pc uintptr) string {
 	var funcName = runtime.FuncForPC(pc).Name()

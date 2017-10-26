@@ -31,8 +31,14 @@ import (
 )
 
 func execute(sqlProxy SqlProxy, stmt QueryStatement, v ...interface{}) (result sql.Result, err error) {
+	execStmt, err := refineConditional(stmt, v...)
+	if err != nil {
+		err = fmt.Errorf("fail to buld conditional query : %s", err.Error())
+		return
+	}
+
 	if len(v) == 0 {
-		return sqlProxy.exec(stmt.Query)
+		return sqlProxy.exec(execStmt.Query)
 	}
 
 	defer func() {
@@ -62,16 +68,16 @@ func execute(sqlProxy SqlProxy, stmt QueryStatement, v ...interface{}) (result s
 	case reflect.Ptr :
 		return nil, errPtrIsNotSupported
 	case reflect.Slice, reflect.Array :
-		return execList(sqlProxy, val, stmt)
+		return execList(sqlProxy, val, execStmt)
 	case reflect.Struct :
 		if _, is := val.(driver.Valuer); !is {
-			return execWithObject(sqlProxy, stmt, val)
+			return execWithObject(sqlProxy, execStmt, val)
 		}
 	case reflect.Map :
-		return execMap(sqlProxy, val, stmt)
+		return execMap(sqlProxy, val, execStmt)
 	}
 
-	return execWithList(sqlProxy, stmt, v)
+	return execWithList(sqlProxy, execStmt, v)
 }
 
 func execList(sqlProxy SqlProxy, val interface{}, stmt QueryStatement) (sql.Result, error) {
@@ -179,7 +185,7 @@ func doExecWithNestedList(sqlProxy SqlProxy, stmt QueryStatement, args []interfa
 		affectedCount, _ := res.RowsAffected()
 		result.rowAffected += affectedCount
 
-		if stmt.sqlTyp == sqlTypeInsert {
+		if stmt.eleType == eleTypeInsert {
 			id, err := res.LastInsertId()
 			if err != nil {
 				return i, nil, fmt.Errorf("fail to get last inserted id : %s", err.Error())
@@ -239,7 +245,7 @@ func doExecWithNestedMap(sqlProxy SqlProxy, stmt QueryStatement, args []interfac
 		affectedCount, _ := res.RowsAffected()
 		result.rowAffected += affectedCount
 
-		if stmt.sqlTyp == sqlTypeInsert {
+		if stmt.eleType == eleTypeInsert {
 			id, err := res.LastInsertId()
 			if err != nil {
 				return i, nil, fmt.Errorf("fail to get last inserted id : %s", err.Error())
@@ -299,7 +305,7 @@ func doExecWithStructList(sqlProxy SqlProxy, stmt QueryStatement, args []interfa
 		affectedCount, _ := res.RowsAffected()
 		result.rowAffected += affectedCount
 
-		if stmt.sqlTyp == sqlTypeInsert {
+		if stmt.eleType == eleTypeInsert {
 			id, err := res.LastInsertId()
 			if err != nil {
 				return i, nil, fmt.Errorf("fail to get last inserted id : %s", err.Error())
@@ -352,8 +358,13 @@ func flattenStructToMap(s interface{}) map[string]interface{} {
 
 
 func queryMultiRow(sqlProxy SqlProxy, stmt QueryStatement, v ...interface{}) (queryedRow *QueryResult) {
+	execStmt, err := refineConditional(stmt, v...)
+	if err != nil {
+		return newQueryResultError(fmt.Errorf("fail to buld conditional query : %s", err.Error()))
+	}
+
 	if len(v) == 0 {
-		pstmt, err := sqlProxy.prepare(stmt.Query)
+		pstmt, err := sqlProxy.prepare(execStmt.Query)
 		if err != nil {
 			return newQueryResultError(err)
 		}
@@ -389,14 +400,47 @@ func queryMultiRow(sqlProxy SqlProxy, stmt QueryStatement, v ...interface{}) (qu
 	case reflect.Ptr :
 		return newQueryResultError(errPtrIsNotSupported)
 	case reflect.Slice, reflect.Array :
-		return queryList(sqlProxy, val, stmt)
+		return queryList(sqlProxy, val, execStmt)
 	case reflect.Struct :
-		return queryWithObject(sqlProxy, stmt, val)
+		return queryWithObject(sqlProxy, execStmt, val)
 	case reflect.Map :
-		return queryMap(sqlProxy, val, stmt)
+		return queryMap(sqlProxy, val, execStmt)
 	}
 
-	return queryWithList(sqlProxy, stmt, v)
+	return queryWithList(sqlProxy, execStmt, v)
+}
+
+func refineConditional(stmt QueryStatement, v ...interface{}) (QueryStatement, error)		{
+	if !stmt.HasCondition() {
+		return stmt, nil
+	}
+
+	if len(v) == 0 {
+		return stmt.RefineStatement(nil)
+	}
+
+	atype := reflect.TypeOf(v[0])
+	val := v[0]
+
+	// reform ptr
+	if atype.Kind() == reflect.Ptr {
+		atype = atype.Elem()
+		if reflect.ValueOf(val).IsNil() {
+			return stmt, errNilPtr
+		}
+		val = reflect.ValueOf(val).Elem().Interface()
+	}
+
+	switch atype.Kind() {
+	case reflect.Map :
+		if m, ok := val.(map[string]interface{}); ok  {
+			return stmt.RefineStatement(m)
+		}
+		passing := flattenToMap(val)
+		return stmt.RefineStatement(passing)
+	default :
+		return stmt.RefineStatement(nil)
+	}
 }
 
 

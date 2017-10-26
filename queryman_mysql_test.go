@@ -48,6 +48,7 @@ const (
 	sqlUpdateCityWithName = "UpdateCityWithName"
 	sqlSelectCityWithName = "SelectCityWithName"
 	sqlCountCity = "CountCity"
+	sqlSelectCityWithIf = "SelectCityWithIf"
 )
 
 const (
@@ -98,13 +99,57 @@ func prepareSourceName() {
 	dbName := flag.String("db", "mmate", "database name")
 	userName := flag.String("user", "mmate", "Username")
 	password := flag.String("password", "angel", "passsword")
-	host := flag.String("host", "10.211.55.8:3306", "ip and port")
+	host := flag.String("host", "127.0.0.1:3306", "ip and port")
 
 	flag.Parse()
 
 	sourceName = fmt.Sprintf("%s:%s@tcp(%s)/%s?autocommit=true&timeout=10s&readTimeout=10s&loc=Asia%%2Fseoul&writeTimeout=1s&parseTime=true&charset=utf8mb4,utf8",
 		*userName, *password, *host, *dbName)
 }
+
+var xmlSample = []byte(`
+<?xml version="1.0" encoding="UTF-8" ?>
+<query>
+    <update id="DropCityTable">
+        drop table if exists city
+    </update>
+    <update id="CreateCityTable">
+create table city (
+    id  bigint NOT NULL AUTO_INCREMENT,
+    name varchar(64) default null,
+    age  int  default 0,
+    is_man  bool default true,
+    percentage float default 0.0,
+    create_time datetime default CURRENT_TIMESTAMP,
+    update_time datetime,
+    primary key (id)
+)
+    </update>
+    <insert id="InsertCity">
+        INSERT INTO CITY(NAME,AGE,IS_MAN,PERCENTAGE,CREATE_TIME,UPDATE_TIME) VALUES({Name},{Age},{IsMan},{Percentage},{CreateTime},{UpdateTime})
+    </insert>
+    <update id="UpdateCityWithName">
+        UPDATE CITY SET AGE={Age} WHERE NAME={Name}
+    </update>
+    <select id="SelectCityWithName">
+        SELECT * FROM CITY WHERE NAME like {Name}
+    </select>
+    <select id="CountCity">
+        SELECT Count(*) FROM CITY
+    </select>
+	<select id="SelectCityWithIf">
+        SELECT id, name, age
+        FROM city
+        WHERE is_man={IsMan}
+        <if key="Name">
+        AND name={Name}
+        </if>
+        <if key="Age">
+        AND age={Age}
+        </if>
+    </select>
+</query>
+`)
 
 func prepareXmlFile() (string, error) {
 	tempDir := os.TempDir()
@@ -113,37 +158,6 @@ func prepareXmlFile() (string, error) {
 	file, _ := ioutil.TempFile(tempDir, xmlFilePrefix)
 	xmlFile := file.Name() + ".xml"
 	os.Rename(file.Name(), xmlFile)
-
-	xmlSample := "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n" +
-		"<query>\n" +
-		"\t<update id=\"DropCityTable\">\n" +
-		"\t\tdrop table if exists city\n" +
-		"\t</update>\n" +
-		"\t<update id=\"CreateCityTable\">\n" +
-		"create table city (\n" +
-		"\tid  bigint NOT NULL AUTO_INCREMENT,\n" +
-		"\tname varchar(64) default null,\n" +
-		"\tage  int  default 0,\n" +
-		"\tis_man  bool default true,\n" +
-		"\tpercentage float default 0.0,\n" +
-		"\tcreate_time datetime default CURRENT_TIMESTAMP,\n" +
-		"\tupdate_time datetime,\n" +
-		"\tprimary key (id)\n" +
-		")\n" +
-		"\t</update>\n" +
-		"\t<insert id=\"InsertCity\">\n" +
-		"\t\tINSERT INTO CITY(NAME,AGE,IS_MAN,PERCENTAGE,CREATE_TIME,UPDATE_TIME) VALUES({Name},{Age},{IsMan},{Percentage},{CreateTime},{UpdateTime})\n" +
-		"\t</insert>\n" +
-		"\t<update id=\"UpdateCityWithName\">\n" +
-		"\t\tUPDATE CITY SET AGE={Age} WHERE NAME={Name}\n" +
-		"\t</update>\n" +
-		"\t<select id=\"SelectCityWithName\">\n" +
-		"\t\tSELECT * FROM CITY WHERE NAME like {Name}\n" +
-		"\t</select>\n" +
-		"\t<select id=\"CountCity\">\n" +
-		"\t\tSELECT Count(*) FROM CITY\n" +
-		"\t</select>\n" +
-		"</query>\n"
 
 	err := ioutil.WriteFile(xmlFile, []byte(xmlSample), 0644)
 	if err != nil {
@@ -198,17 +212,27 @@ func TestDDL(t *testing.T) {
 }
 
 func dropAndCreateTable() error {
-	_, err := queryManager.Execute(sqlDropCityTable)
+	err := dropCityTable()
 	if err != nil {
 		return fmt.Errorf("fail to execute(%s) : %s\n", sqlDropCityTable, err.Error())
 	}
 
-	_, err = queryManager.Execute(sqlCreateCityTable)
+	err = createCityTable()
 	if err != nil {
 		return fmt.Errorf("fail to execute(%s) : %s\n", sqlCreateCityTable, err.Error())
 	}
 
 	return nil
+}
+
+func dropCityTable() error {
+	_, err := queryManager.Execute()
+	return err
+}
+
+func createCityTable() error {
+	_, err := queryManager.Execute()
+	return err
 }
 
 func setup()	{
@@ -236,46 +260,10 @@ func TestQueryUnknownStatementId(t *testing.T) {
 	}
 }
 
-func TestUserQuery(t *testing.T) {
-	if querymanStatus < statusReady {
-		t.Error("querymanager is not ready")
-		return
-	}
-
-	// insert sample
-	_, err := queryManager.Execute(sqlInsertCity, "bare param", 42, true, 40.0, time.Now(), nil)
-	if err != nil {
-		t.Error(err.Error())
-		return
-	}
-
-	userQuery := "SELECT * FROM CITY WHERE NAME like {Name}"
-	city := &City{}
-	result := queryManager.Query(userQuery, "bare param") // time is null
-	if result.GetError() != nil {
-		t.Error(result.GetError())
-		return
-	}
-
-	defer result.Close()
-
-	if !result.Next() {
-		t.Error(errNoMoreData)
-		return
-	}
-
-	err = result.Scan(city)
-	if err != nil {
-		t.Errorf("fail to scan : %s", err.Error())
-		return
-	}
-}
-
-
 func TestInsertBareParams(t *testing.T) {
 	setup()
 
-	result, err := queryManager.Execute(sqlInsertCity, "bare param", 42, true, 40.0, time.Now(), nil)
+	result, err := queryManager.ExecuteWithStmt(sqlInsertCity, "bare param", 42, true, 40.0, time.Now(), nil)
 	if err != nil {
 		t.Error(err.Error())
 		return
@@ -304,7 +292,7 @@ func TestInsertSlice(t *testing.T) {
 	args = append(args, 40.0)
 	args = append(args, time.Now())
 	args = append(args, nil)
-	result, err := queryManager.Execute(sqlInsertCity, args)
+	result, err := queryManager.ExecuteWithStmt(sqlInsertCity, args)
 	if err != nil {
 		t.Error(err.Error())
 		return
@@ -332,7 +320,7 @@ func TestInsertSlicePtr(t *testing.T) {
 	args = append(args, 40.0)
 	args = append(args, time.Now())
 	args = append(args, nil)
-	result, err := queryManager.Execute(sqlInsertCity, &args)
+	result, err := queryManager.ExecuteWithStmt(sqlInsertCity, &args)
 	if err != nil {
 		t.Error(err.Error())
 		return
@@ -355,7 +343,7 @@ func TestInsertObject(t *testing.T) {
 
 	city := createCity()
 
-	result, err := queryManager.Execute(sqlInsertCity, city)
+	result, err := queryManager.ExecuteWithStmt(sqlInsertCity, city)
 	if err != nil {
 		t.Error(err.Error())
 		return
@@ -378,7 +366,7 @@ func TestInsertObjectPtr(t *testing.T) {
 
 	city := createCity()
 	city.Name = "ptr test"
-	result, err := queryManager.Execute(sqlInsertCity, &city)
+	result, err := queryManager.ExecuteWithStmt(sqlInsertCity, &city)
 	if err != nil {
 		t.Error(err.Error())
 		return
@@ -407,7 +395,7 @@ func TestInsertMap(t *testing.T) {
 	args["CreateTime"] = time.Now()
 	args["UpdateTime"] = time.Now()
 
-	result, err := queryManager.Execute(sqlInsertCity, args)
+	result, err := queryManager.ExecuteWithStmt(sqlInsertCity, args)
 	if err != nil {
 		t.Error(err.Error())
 		return
@@ -437,7 +425,7 @@ func TestInsertNullableSlice(t *testing.T) {
 	args = append(args, time.Now())
 	args = append(args, nil)
 
-	result, err := queryManager.Execute(sqlInsertCity, args)
+	result, err := queryManager.ExecuteWithStmt(sqlInsertCity, args)
 	if err != nil {
 		t.Error(err.Error())
 		return
@@ -473,7 +461,7 @@ func TestInsertNestedSlice(t *testing.T) {
 		params = append(params, args)
 	}
 
-	result, err := queryManager.Execute(sqlInsertCity, params)
+	result, err := queryManager.ExecuteWithStmt(sqlInsertCity, params)
 	if err != nil {
 		t.Error(err.Error())
 		return
@@ -516,7 +504,7 @@ func TestInsertNestedMap(t *testing.T) {
 		params = append(params, args)
 	}
 
-	result, err := queryManager.Execute(sqlInsertCity, params)
+	result, err := queryManager.ExecuteWithStmt(sqlInsertCity, params)
 	if err != nil {
 		t.Error(err.Error())
 		return
@@ -551,7 +539,7 @@ func TestInsertNestedObject(t *testing.T) {
 		params = append(params, createCity())
 	}
 
-	result, err := queryManager.Execute(sqlInsertCity, params)
+	result, err := queryManager.ExecuteWithStmt(sqlInsertCity, params)
 	if err != nil {
 		t.Error(err.Error())
 		return
@@ -587,7 +575,7 @@ func TestInsertNestedObjectPtr(t *testing.T) {
 		params = append(params, &city)
 	}
 
-	result, err := queryManager.Execute(sqlInsertCity, params)
+	result, err := queryManager.ExecuteWithStmt(sqlInsertCity, params)
 	if err != nil {
 		t.Error(err.Error())
 		return
@@ -620,7 +608,7 @@ func TestTransactionInsert(t *testing.T) {
 	city := createCity()
 	tx, err := queryManager.Begin()
 	defer tx.Rollback()
-	result, err := tx.Execute(sqlInsertCity, city)
+	result, err := tx.ExecuteWithStmt(sqlInsertCity, city)
 	if err != nil {
 		t.Error(err.Error())
 		return
@@ -654,7 +642,7 @@ func TestTransactionInsert(t *testing.T) {
 func TestQueryButNoMoreData(t *testing.T) {
 	setup()
 
-	result := queryManager.Query(sqlSelectCityWithName, "slice name") // time is null
+	result := queryManager.QueryWithStmt(sqlSelectCityWithName, "slice name") // time is null
 	if result.GetError() != nil {
 		t.Error(result.GetError())
 		return
@@ -673,14 +661,14 @@ func TestQueryOneObject(t *testing.T) {
 	setup()
 
 	// insert sample
-	_, err := queryManager.Execute(sqlInsertCity, "bare param", 42, true, 40.0, time.Now(), nil)
+	_, err := queryManager.ExecuteWithStmt(sqlInsertCity, "bare param", 42, true, 40.0, time.Now(), nil)
 	if err != nil {
 		t.Error(err.Error())
 		return
 	}
 
 	city := &City{}
-	result := queryManager.Query(sqlSelectCityWithName, "bare param") // time is null
+	result := queryManager.QueryWithStmt(sqlSelectCityWithName, "bare param") // time is null
 	if result.GetError() != nil {
 		t.Error(result.GetError())
 		return
@@ -706,14 +694,14 @@ func TestQueryRowBare(t *testing.T) {
 	setup()
 
 	// insert sample
-	_, err := queryManager.Execute(sqlInsertCity, "sample_city", 42, true, 40.0, time.Now(), time.Now())
+	_, err := queryManager.ExecuteWithStmt(sqlInsertCity, "sample_city", 42, true, 40.0, time.Now(), time.Now())
 	if err != nil {
 		t.Error(err.Error())
 		return
 	}
 
 	count := 0
-	err = queryManager.QueryRow(sqlCountCity).Scan(&count)
+	err = queryManager.QueryRowWithStmt(sqlCountCity).Scan(&count)
 	if err != nil {
 		t.Error(err.Error())
 		return
@@ -729,7 +717,7 @@ func TestQueryRowStruct(t *testing.T) {
 	setup()
 
 	// insert sample
-	_, err := queryManager.Execute(sqlInsertCity, "unexported_field", 42, true, 40.0, time.Now(), time.Now())
+	_, err := queryManager.ExecuteWithStmt(sqlInsertCity, "unexported_field", 42, true, 40.0, time.Now(), time.Now())
 	if err != nil {
 		t.Error(err.Error())
 		return
@@ -746,8 +734,7 @@ func TestQueryRowStruct(t *testing.T) {
 	}
 
 	city := NullableCity{}
-
-	err = queryManager.QueryRow(sqlSelectCityWithName, "unexported_field").Scan(&city)
+	err = queryManager.QueryRowWithStmt(sqlSelectCityWithName, "unexported_field").Scan(&city)
 	if err != nil {
 		t.Error(err.Error())
 		return
@@ -762,7 +749,7 @@ func TestQueryBare(t *testing.T) {
 	setup()
 
 	// insert sample
-	_, err := queryManager.Execute(sqlInsertCity, "unexported_field", 42, true, 40.0, time.Now(), time.Now())
+	_, err := queryManager.ExecuteWithStmt(sqlInsertCity, "unexported_field", 42, true, 40.0, time.Now(), time.Now())
 	if err != nil {
 		t.Error(err.Error())
 		return
@@ -776,7 +763,7 @@ func TestQueryBare(t *testing.T) {
 	city := &City{}
 	city.Name = "initial city name"
 	sample := HasUnexportedFieldCity{Name:"unexported_field"}
-	result := queryManager.Query(sqlSelectCityWithName, sample)
+	result := queryManager.QueryWithStmt(sqlSelectCityWithName, sample)
 	if result.GetError() != nil {
 		t.Errorf(result.GetError().Error())
 		return
@@ -806,7 +793,7 @@ func TestQueryWithMap(t *testing.T) {
 	setup()
 
 	// insert sample
-	_, err := queryManager.Execute(sqlInsertCity, "map_name", 42, true, 40.0, time.Now(), time.Now())
+	_, err := queryManager.ExecuteWithStmt(sqlInsertCity, "map_name", 42, true, 40.0, time.Now(), time.Now())
 	if err != nil {
 		t.Error(err.Error())
 		return
@@ -814,7 +801,7 @@ func TestQueryWithMap(t *testing.T) {
 
 	m := make(map[string]string)
 	m["Name"] = "map_name"
-	result := queryManager.Query(sqlSelectCityWithName, m)
+	result := queryManager.QueryWithStmt(sqlSelectCityWithName, m)
 	if result.GetError() != nil {
 		t.Errorf(result.GetError().Error())
 		return
@@ -844,7 +831,7 @@ func TestQueryNullAndSkipSetting(t *testing.T) {
 	setup()
 
 	// insert sample
-	_, err := queryManager.Execute(sqlInsertCity, "nullable", nil, nil, nil, nil, nil)
+	_, err := queryManager.ExecuteWithStmt(sqlInsertCity, "nullable", nil, nil, nil, nil, nil)
 	if err != nil {
 		t.Error(err.Error())
 		return
@@ -861,7 +848,7 @@ func TestQueryNullAndSkipSetting(t *testing.T) {
 	}
 
 	city := NullableCity{}
-	result := queryManager.Query(sqlSelectCityWithName, "nullable")
+	result := queryManager.QueryWithStmt(sqlSelectCityWithName, "nullable")
 	if result.GetError() != nil {
 		t.Errorf(result.GetError().Error())
 		return
@@ -886,7 +873,7 @@ func TestQueryNullScanning(t *testing.T) {
 	setup()
 
 	// insert sample
-	_, err := queryManager.Execute(sqlInsertCity, "nullable", nil, nil, nil, nil, nil)
+	_, err := queryManager.ExecuteWithStmt(sqlInsertCity, "nullable", nil, nil, nil, nil, nil)
 	if err != nil {
 		t.Error(err.Error())
 		return
@@ -903,7 +890,7 @@ func TestQueryNullScanning(t *testing.T) {
 	}
 
 	city := NullableCity{}
-	result := queryManager.Query(sqlSelectCityWithName, "%null%")
+	result := queryManager.QueryWithStmt(sqlSelectCityWithName, "%null%")
 	if result.GetError() != nil {
 		t.Errorf(result.GetError().Error())
 		return
@@ -920,6 +907,56 @@ func TestQueryNullScanning(t *testing.T) {
 	if err != nil {
 		t.Error(err.Error())
 		return
+	}
+}
+
+
+func TestSelectCityWithIf(t *testing.T) {
+	setup()
+
+	// insert sample
+	_, err := queryManager.ExecuteWithStmt(sqlInsertCity, "map_name", 42, true, 40.0, time.Now(), time.Now())
+	if err != nil {
+		t.Error(err.Error())
+		return
+	}
+
+	type NullableCity struct {
+		Id		sql.NullInt64
+		Name	sql.NullString
+		Age		sql.NullInt64
+		IsMan	sql.NullBool
+		Percentage sql.NullFloat64
+		CreateTime mysql.NullTime
+		UpdateTime mysql.NullTime
+	}
+
+	city := NullableCity{}
+	m := make(map[string]interface{})
+	m["IsMan"] = true
+
+	m["Name"] = "map_name_not_found"
+	err = queryManager.QueryRowWithStmt(sqlSelectCityWithIf, m).Scan(&city)
+	if err == nil {
+		t.Fatalf("should be no rows")
+	}
+
+	m["Name"] = "map_name"
+	err = queryManager.QueryRowWithStmt(sqlSelectCityWithIf, m).Scan(&city)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	if !(city.Age.Valid && city.Age.Int64 == 42) {
+		t.Fatalf("invalid age")
+	}
+
+	m["Age"] = 42
+	err = queryManager.QueryRowWithStmt(sqlSelectCityWithIf, m).Scan(&city)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	if !(city.Age.Valid && city.Age.Int64 == 42) {
+		t.Fatalf("invalid age")
 	}
 }
 

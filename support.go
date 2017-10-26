@@ -143,7 +143,7 @@ func (n *UserQueryNormalizer) normalize(stmt *QueryStatement) error {
 	stmt.Query = strings.Trim(stmt.Query, " \r\n\t")
 	stmt.columnMention = make([]string, 0)
 	if len(stmt.Query) < 3 {
-		return fmt.Errorf("invalid Query : %s", stmt.Query)
+		return fmt.Errorf("invalid query : %s", stmt.Query)
 	}
 
 	var buffer bytes.Buffer

@@ -24,19 +24,48 @@
 package queryman
 
 import (
-	"encoding/xml"
 	"database/sql"
 	"errors"
+	"strings"
+	"fmt"
 )
 
 const (
-	sqlTypeInsert = iota
-	sqlTypeUpdate
-	sqlTypeDelete
-	sqlTypeSelect
+	eleTypeUnknown = iota
+	eleTypeInsert
+	eleTypeUpdate
+	eleTypeSelect
+	eleTypeIf
 )
 
-type declareSqlType uint8
+type declareElementType uint8
+
+func (d declareElementType) String() string {
+	switch d {
+	case eleTypeInsert :	return "INSERT"
+	case eleTypeUpdate :	return "UPDATE"
+	case eleTypeSelect :	return "SELECT"
+	case eleTypeIf :	return "IF"
+	}
+	return "UNKNOWN"
+}
+
+func (d declareElementType) IsSql() bool {
+	if d == eleTypeInsert || d == eleTypeUpdate || d == eleTypeSelect {
+		return true
+	}
+	return false
+}
+
+func buildElementType(stmt string) declareElementType	{
+	switch strings.ToLower(stmt)	{
+	case "select" :	return eleTypeSelect
+	case "insert" :	return eleTypeInsert
+	case "update" :	return eleTypeUpdate
+	case "if" :	return eleTypeIf
+	}
+	return eleTypeUnknown
+}
 
 var (
 	errInterfaceIsNotSupported = errors.New("not supported type : interface")
@@ -64,16 +93,95 @@ type QueryStatementFinder interface {
 }
 
 type QueryStatement struct {
-	sqlTyp			declareSqlType
-	Id            	string		`xml:"id,attr"`
-	Query         	string		`xml:",cdata"`
-	columnMention 	[]string
+	eleType       declareElementType
+	Id            string		`xml:"id,attr"`
+	Query         string		`xml:",cdata"`
+	clause        []IfClause	`xml:"if"`
+	columnMention []string
 }
 
-type UserQuery struct {
-	XMLName 	xml.Name 			`xml:"query"`
-	SqlInsert  []QueryStatement    `xml:"insert"`
-	SqlUpdate  []QueryStatement    `xml:"update"`
-	SqlDelete  []QueryStatement    `xml:"delete"`
-	SqlSelect  []QueryStatement    `xml:"select"`
+func (stmt QueryStatement) clone() QueryStatement {
+	clone := QueryStatement{}
+	clone.eleType = stmt.eleType
+	clone.Id = stmt.Id
+	clone.Query = stmt.Query
+	clone.clause = make([]IfClause, 0)
+	for _, v := range stmt.clause {
+		clone.clause = append(clone.clause, v)
+	}
+	return clone
+}
+
+func (stmt QueryStatement) String() string {
+	return fmt.Sprintf("eleType=[%s], id=[%s], query=[%s], caluse=[%v], columns=[%v]",
+			stmt.eleType, stmt.Id, stmt.Query, stmt.clause, stmt.columnMention)
+}
+
+func (stmt QueryStatement) HasCondition() bool {
+	if len(stmt.clause) > 0 {
+		return true
+	}
+	return false
+}
+
+func (stmt QueryStatement) RefineStatement(params map[string]interface{}) (QueryStatement, error) {
+	refined := stmt.clone()
+	for _, v := range stmt.clause {
+		if params == nil {
+			refined.Query = strings.Replace(refined.Query, v.id, "", -1)
+			continue
+		}
+
+		_, ok := params[v.key]
+		if v.exist {
+			if ok {
+				refined.Query = strings.Replace(refined.Query, v.id, v.query, -1)
+			} else {
+				refined.Query = strings.Replace(refined.Query, v.id, "", -1)
+			}
+		} else {
+			if !ok {
+				refined.Query = strings.Replace(refined.Query, v.id, v.query, -1)
+			} else {
+				refined.Query = strings.Replace(refined.Query, v.id, "", -1)
+			}
+		}
+	}
+	err := queryNormalizer.normalize(&refined)
+	return refined, err
+}
+
+func (stmt *QueryStatement) appendIf(clause IfClause)  {
+	stmt.clause = append(stmt.clause, clause)
+}
+
+type IfClause struct {
+	id    string
+	key   string
+	query string
+	exist bool
+}
+
+func newIfClause(key string, sql string, exist string)	IfClause {
+	c := IfClause{}
+	c.id = fmt.Sprintf("%s%d%s", ifClauseWrappingKey, generateIfClauseSeq(), ifClauseWrappingKey)
+	c.key = key
+	c.query = sql
+	c.exist = true
+	if len(exist) > 0 && strings.ToLower(exist) != "true" {
+		c.exist = false
+	}
+
+	return c
+}
+
+var ifClauseSeq = 0
+const ifClauseWrappingKey = "\x00"
+
+func generateIfClauseSeq() int {
+	defer func() {
+		ifClauseSeq = ifClauseSeq + 1
+	} ()
+
+	return ifClauseSeq
 }

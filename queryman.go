@@ -30,6 +30,8 @@ import (
 	"runtime"
 )
 
+var queryNormalizer         QueryNormalizer
+
 type QueryNormalizer interface {
 	normalize(stmt *QueryStatement) error
 }
@@ -38,7 +40,6 @@ type QueryMan struct {
 	db                 *sql.DB
 	preference         QuerymanPreference
 	statementMap       map[string]QueryStatement
-	normalizer         QueryNormalizer
 	fieldNameConverter FieldNameConvertStrategy
 }
 
@@ -47,21 +48,23 @@ func (man *QueryMan) GetSqlCount() int {
 }
 
 func (man *QueryMan) registStatement(queryStatement QueryStatement) error {
-	if man.normalizer == nil {
-		man.normalizer = newNormalizer(man.preference.DriverName)
-		if man.normalizer == nil {
+	if queryNormalizer == nil {
+		queryNormalizer = newNormalizer(man.preference.DriverName)
+		if queryNormalizer == nil {
 			return fmt.Errorf("not found normalizer for %s", man.preference.DriverName)
 		}
 	}
 
-	err := man.normalizer.normalize(&queryStatement)
-	if err != nil {
-		return err
+	if !queryStatement.HasCondition()	{
+		err := queryNormalizer.normalize(&queryStatement)
+		if err != nil {
+			return err
+		}
 	}
 
 	id := strings.ToUpper(queryStatement.Id)
 	if _, exists := man.statementMap[id]; exists {
-		return fmt.Errorf("duplicated user statement Id : %s", id)
+		return fmt.Errorf("duplicated user statement id : %s", id)
 	}
 
 	man.statementMap[id] = queryStatement
@@ -91,53 +94,10 @@ func (man *QueryMan) prepare(query string) (*sql.Stmt, error) {
 func (man *QueryMan) find(id string)	(QueryStatement, error) {
 	stmt, ok := man.statementMap[strings.ToUpper(id)]
 	if !ok {
-		//if isUserQuery(id) {
-		//	return buildUserQueryStatement(man, id)
-		//}
-		return stmt, fmt.Errorf("not found Query statement for Id : %s", id)
+		return stmt, fmt.Errorf("not found query statement for id : %s", id)
 	}
 
 	return stmt, nil
-}
-
-func isUserQuery(query string) bool {
-	if strings.Index(query, " ") > 0 {
-		return true
-	}
-	if strings.Index(query, "\t") > 0 {
-		return true
-	}
-	if strings.Index(query, "\n") > 0 {
-		return true
-	}
-	if strings.Index(query, "\r") > 0 {
-		return true
-	}
-	return false
-}
-
-func buildUserQueryStatement(manager *QueryMan, query string)	(QueryStatement, error) {
-	stmt := QueryStatement{}
-	stmt.sqlTyp = getDeclareSqlType(query)
-	stmt.Id = query
-	stmt.Query = query
-
-	err := manager.registStatement(stmt)
-	saved, _ := manager.statementMap[strings.ToUpper(query)]
-	return saved, err
-}
-
-func getDeclareSqlType(query string) declareSqlType {
-	prefix := strings.Trim(query, " \r\n\t")[:10]
-	prefix = strings.ToUpper(prefix)
-	if strings.HasPrefix(prefix, "SELECT") {
-		return sqlTypeSelect
-	} else if strings.HasPrefix(prefix, "INSERT") {
-		return sqlTypeInsert
-	} else if strings.HasPrefix(prefix, "DELETE") {
-		return sqlTypeDelete
-	}
-	return sqlTypeUpdate
 }
 
 func (man *QueryMan) Execute(v ...interface{}) (sql.Result, error) {
@@ -152,7 +112,7 @@ func (man *QueryMan) ExecuteWithStmt(stmtIdOrUserQuery string, v ...interface{})
 		return nil, err
 	}
 
-	if stmt.sqlTyp == sqlTypeSelect  {
+	if stmt.eleType != eleTypeInsert && stmt.eleType != eleTypeUpdate {
 		return nil, errExecutionInvalidSqlType
 	}
 
@@ -171,7 +131,7 @@ func (man *QueryMan) QueryWithStmt(stmtIdOrUserQuery string, v ...interface{}) *
 		return newQueryResultError(err)
 	}
 
-	if stmt.sqlTyp != sqlTypeSelect {
+	if stmt.eleType != eleTypeSelect {
 		return newQueryResultError(errQueryInvalidSqlType)
 	}
 
@@ -193,18 +153,18 @@ func (man *QueryMan) QueryRowWithStmt(stmtIdOrUserQuery string, v ...interface{}
 		return newQueryRowResultError(err)
 	}
 
-	if stmt.sqlTyp != sqlTypeSelect {
+	if stmt.eleType != eleTypeSelect {
 		return newQueryRowResultError(errQueryInvalidSqlType)
 	}
 
-	queryResult := queryMultiRow(man, stmt, v...)
-
 	var queryRowResult *QueryRowResult
+	queryResult := queryMultiRow(man, stmt, v...)
 	if queryResult.err != nil {
 		queryRowResult = newQueryRowResultError(queryResult.err)
 	} else {
 		queryRowResult = newQueryRowResult(queryResult.pstmt, queryResult.rows)
 	}
+
 	queryRowResult.fieldNameConverter = man.fieldNameConverter
 	return queryRowResult
 }

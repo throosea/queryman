@@ -79,7 +79,7 @@ func (t *DBTransaction) ExecuteWithStmt(id string, v ...interface{}) (sql.Result
 		return nil, err
 	}
 
-	if stmt.sqlTyp == sqlTypeSelect {
+	if stmt.eleType != eleTypeInsert && stmt.eleType != eleTypeUpdate {
 		return nil, errExecutionInvalidSqlType
 	}
 
@@ -98,7 +98,7 @@ func (t *DBTransaction) QueryWithStmt(id string, v ...interface{}) *QueryResult 
 		return newQueryResultError(err)
 	}
 
-	if stmt.sqlTyp != sqlTypeSelect {
+	if stmt.eleType != eleTypeSelect {
 		return newQueryResultError(errQueryInvalidSqlType)
 	}
 
@@ -120,7 +120,7 @@ func (t *DBTransaction) QueryRowWithStmt(id string, v ...interface{}) *QueryRowR
 		return newQueryRowResultError(err)
 	}
 
-	if stmt.sqlTyp != sqlTypeSelect {
+	if stmt.eleType != eleTypeSelect {
 		return newQueryRowResultError(errQueryInvalidSqlType)
 	}
 

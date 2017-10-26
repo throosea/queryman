@@ -33,6 +33,7 @@ import (
 	"runtime"
 	"database/sql"
 	"time"
+	"io"
 )
 
 type QuerymanPreference struct {
@@ -50,7 +51,7 @@ func NewQuerymanPreference(filepath string, dataSourceName string) QuerymanPrefe
 	pref := QuerymanPreference{}
 	pref.queryFilePath = filepath
 	pref.Fileset = "*.xml"
-	pref.DriverName = "mysql"
+	pref.DriverName = "mysql"		// default
 	pref.dataSourceName = dataSourceName
 	pref.ConnMaxLifetime = time.Duration(time.Second * 60)
 	pref.MaxIdleConns = 1
@@ -114,47 +115,134 @@ func loadXmlFile(manager *QueryMan, filePath string, fileSet string) error {
 			return fmt.Errorf("fail to read file[%s] : %s", file, err.Error())
 		}
 
-		userQuery := UserQuery{}
-		err = xml.Unmarshal(data, &userQuery)
+		err = loadWithSax(manager, data)
 		if err != nil {
-			fmt.Printf("%s\n", string(data))
-			return fmt.Errorf("xml unmarshal fail : %s (file:%s)", err.Error(), file)
-		}
-
-		for _, v := range userQuery.SqlInsert {
-			v.sqlTyp = sqlTypeInsert
-			err = manager.registStatement(v)
-			if err != nil {
-				return err
-			}
-		}
-
-		for _, v := range userQuery.SqlUpdate {
-			v.sqlTyp = sqlTypeUpdate
-			err = manager.registStatement(v)
-			if err != nil {
-				return err
-			}
-		}
-
-		for _, v := range userQuery.SqlDelete {
-			v.sqlTyp = sqlTypeDelete
-			err = manager.registStatement(v)
-			if err != nil {
-				return err
-			}
-		}
-
-		for _, v := range userQuery.SqlSelect {
-			v.sqlTyp = sqlTypeSelect
-			err = manager.registStatement(v)
-			if err != nil {
-				return err
-			}
+			return err
 		}
 	}
 
 	return nil
+}
+
+func loadWithSax(manager *QueryMan, data []byte) error {
+	stmtList = make([]QueryStatement, 0)
+	buf := bytes.NewBuffer(data)
+	dec := xml.NewDecoder(buf)
+
+	for {
+		t, tokenErr := dec.Token()
+		if tokenErr != nil {
+			if tokenErr == io.EOF {
+				break
+			}
+			return tokenErr
+		}
+
+		switch t := t.(type) {
+		case xml.StartElement:
+			currentId = getAttr(t.Attr, attrId)
+			currentEleType = buildElementType(t.Name.Local)
+			if currentEleType.IsSql()	{
+				currentStmt = newQueryStatement(currentEleType)
+				traverseIf(dec)
+			}
+		case xml.CharData:
+			if len(currentId) == 0 {
+				break
+			}
+			currentStmt.Query = currentStmt.Query + string(t)
+		case xml.EndElement:
+			if currentEleType.IsSql() {
+				currentStmt.Query = strings.Trim(currentStmt.Query, cutset)
+				currentId = ""
+			}
+		}
+	}
+
+	for _, v := range stmtList {
+		err := manager.registStatement(v)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func newQueryStatement(sqlType declareElementType)	QueryStatement	{
+	stmt := QueryStatement{}
+	stmt.eleType = sqlType
+	stmt.Id = currentId
+	stmt.clause = make([]IfClause, 0)
+	stmt.columnMention = make([]string, 0)
+	return stmt
+}
+
+const (
+	attrId  = "id"
+	attrKey = "key"
+	attrExist = "exist"
+	cutset  = "\r\t\n "
+)
+
+var (
+	currentStmt    QueryStatement
+	currentEleType declareElementType
+	currentId      string
+	stmtList  []QueryStatement
+)
+
+
+func getAttr(attr []xml.Attr, name string) string {
+	for _, v := range attr {
+		if v.Name.Local == name {
+			return v.Value
+		}
+	}
+	return ""
+}
+
+func traverseIf(dec *xml.Decoder) {
+	var innerElement declareElementType
+	var innerSql = ""
+	var innerKey = ""
+	var innerExist = "true"
+
+	for {
+		t, tokenErr := dec.Token()
+		if tokenErr != nil {
+			if tokenErr == io.EOF {
+				break
+			}
+			panic(tokenErr)
+		}
+
+		switch t := t.(type) {
+		case xml.StartElement:
+			innerKey = getAttr(t.Attr, attrKey)
+			innerExist = getAttr(t.Attr, attrExist)
+			innerElement = buildElementType(t.Name.Local)
+		case xml.CharData:
+			if innerElement == eleTypeIf {
+				innerSql = innerSql + " " + strings.Trim(string(t), cutset)
+			} else  {
+				currentStmt.Query = currentStmt.Query + string(t)
+			}
+		case xml.EndElement:
+			if innerElement == eleTypeIf {
+				ifclause := newIfClause(innerKey, innerSql, innerExist)
+				currentStmt.Query = fmt.Sprintf("%s %s", currentStmt.Query, ifclause.id)
+				currentStmt.appendIf(ifclause)
+				innerSql = ""
+				innerElement = eleTypeUnknown
+			} else if currentEleType.IsSql() {
+				currentStmt.Query = strings.Trim(currentStmt.Query, cutset)
+				stmtList = append(stmtList, currentStmt)
+				return
+			}
+			currentId = ""
+		}
+	}
 }
 
 

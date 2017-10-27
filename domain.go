@@ -68,17 +68,17 @@ func buildElementType(stmt string) declareElementType	{
 }
 
 var (
-	errInterfaceIsNotSupported = errors.New("not supported type : interface")
-	errPtrIsNotSupported = errors.New("not supported type : ptr")
-	errInvalidMapKeyType = errors.New("map key should be string")
-	errInvalidMapType = errors.New("map only accepted [string]interface{} type")
-	errExecutionInvalidSqlType = errors.New("invalid execution for sql. only insert or update permitted")
-	errQueryInvalidSqlType = errors.New("invalid query for sql. only select permitted")
-	errQueryInsufficientParameter = errors.New("insufficient query parameter for select result")
-	errQueryNeedsPtrParameter = errors.New("when you select in query, you have to pass parameter as ptr")
-	errNilPtr = errors.New("destination pointer is nil")
-	errNoRows = errors.New("sql: no rows in result set")
-	errNoInsertId = errors.New("sql: no insert id")
+	ErrInterfaceIsNotSupported    = errors.New("not supported type : interface")
+	ErrPtrIsNotSupported          = errors.New("not supported type : ptr")
+	ErrInvalidMapKeyType          = errors.New("map key should be string")
+	ErrInvalidMapType             = errors.New("map only accepted [string]interface{} type")
+	ErrExecutionInvalidSqlType    = errors.New("invalid execution for sql. only insert or update permitted")
+	ErrQueryInvalidSqlType        = errors.New("invalid query for sql. only select permitted")
+	ErrQueryInsufficientParameter = errors.New("insufficient query parameter for select result")
+	ErrQueryNeedsPtrParameter     = errors.New("when you select in query, you have to pass parameter as ptr")
+	ErrNilPtr                     = errors.New("destination pointer is nil")
+	ErrNoRows                     = errors.New("sql: no rows in result set")
+	ErrNoInsertId                 = errors.New("sql: no insert id")
 )
 
 type SqlProxy interface {

@@ -76,11 +76,11 @@ func (r *QueryResult) Scan(v ...interface{}) (err error) {
 	atype := reflect.TypeOf(v[0])
 
 	if atype.Kind() != reflect.Ptr {
-		return errQueryNeedsPtrParameter
+		return ErrQueryNeedsPtrParameter
 	}
 
 	if reflect.ValueOf(v[0]).IsNil() {
-		return errNilPtr
+		return ErrNilPtr
 	}
 
 	atype = atype.Elem()
@@ -88,9 +88,9 @@ func (r *QueryResult) Scan(v ...interface{}) (err error) {
 
 	switch atype.Kind() {
 	case reflect.Interface :
-		return errInterfaceIsNotSupported
+		return ErrInterfaceIsNotSupported
 	case reflect.Ptr :
-		return errPtrIsNotSupported
+		return ErrPtrIsNotSupported
 	case reflect.Struct :
 		if _, is := val.Interface().(driver.Valuer); !is {
 			return r.scanToStruct(&val)
@@ -171,17 +171,17 @@ func (r *QueryRowResult) Scan(v ...interface{}) (err error) {
 		if err := r.rows.Err(); err != nil {
 			return err
 		}
-		return errNoRows
+		return ErrNoRows
 	}
 
 	atype := reflect.TypeOf(v[0])
 
 	if atype.Kind() != reflect.Ptr {
-		return errQueryNeedsPtrParameter
+		return ErrQueryNeedsPtrParameter
 	}
 
 	if reflect.ValueOf(v[0]).IsNil() {
-		return errNilPtr
+		return ErrNilPtr
 	}
 
 	atype = atype.Elem()
@@ -189,9 +189,9 @@ func (r *QueryRowResult) Scan(v ...interface{}) (err error) {
 
 	switch atype.Kind() {
 	case reflect.Interface :
-		return errInterfaceIsNotSupported
+		return ErrInterfaceIsNotSupported
 	case reflect.Ptr :
-		return errPtrIsNotSupported
+		return ErrPtrIsNotSupported
 	case reflect.Struct :
 		if _, is := val.Interface().(driver.Valuer); !is {
 			return r.scanToStruct(&val)
@@ -231,7 +231,7 @@ func (p ExecMultiResult) GetInsertIdList() []int64  {
 
 func (p ExecMultiResult) LastInsertId() (int64, error) {
 	if p.idList == nil || len(p.idList) == 0 {
-		return 0, errNoInsertId
+		return 0, ErrNoInsertId
 	}
 
 	return p.idList[0], nil

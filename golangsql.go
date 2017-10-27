@@ -29,13 +29,13 @@ func convertAssign(dest, src interface{}) error {
 		switch d := dest.(type) {
 		case *string:
 			if d == nil {
-				return errNilPtr
+				return ErrNilPtr
 			}
 			*d = s
 			return nil
 		case *[]byte:
 			if d == nil {
-				return errNilPtr
+				return ErrNilPtr
 			}
 			*d = []byte(s)
 			return nil
@@ -44,25 +44,25 @@ func convertAssign(dest, src interface{}) error {
 		switch d := dest.(type) {
 		case *string:
 			if d == nil {
-				return errNilPtr
+				return ErrNilPtr
 			}
 			*d = string(s)
 			return nil
 		case *interface{}:
 			if d == nil {
-				return errNilPtr
+				return ErrNilPtr
 			}
 			*d = cloneBytes(s)
 			return nil
 		case *[]byte:
 			if d == nil {
-				return errNilPtr
+				return ErrNilPtr
 			}
 			*d = cloneBytes(s)
 			return nil
 		case *sql.RawBytes:
 			if d == nil {
-				return errNilPtr
+				return ErrNilPtr
 			}
 			*d = s
 			return nil
@@ -74,7 +74,7 @@ func convertAssign(dest, src interface{}) error {
 			return nil
 		case *[]byte:
 			if d == nil {
-				return errNilPtr
+				return ErrNilPtr
 			}
 			*d = []byte(s.Format(time.RFC3339Nano))
 			return nil
@@ -83,19 +83,19 @@ func convertAssign(dest, src interface{}) error {
 		switch d := dest.(type) {
 		case *interface{}:
 			if d == nil {
-				return errNilPtr
+				return ErrNilPtr
 			}
 			*d = nil
 			return nil
 		case *[]byte:
 			if d == nil {
-				return errNilPtr
+				return ErrNilPtr
 			}
 			*d = nil
 			return nil
 		case *sql.RawBytes:
 			if d == nil {
-				return errNilPtr
+				return ErrNilPtr
 			}
 			*d = nil
 			return nil
@@ -143,7 +143,7 @@ func convertAssign(dest, src interface{}) error {
 		return errors.New("destination not a pointer")
 	}
 	if dpv.IsNil() {
-		return errNilPtr
+		return ErrNilPtr
 	}
 
 	if !sv.IsValid() {

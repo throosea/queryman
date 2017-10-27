@@ -113,7 +113,7 @@ func (man *QueryMan) ExecuteWithStmt(stmtIdOrUserQuery string, v ...interface{})
 	}
 
 	if stmt.eleType != eleTypeInsert && stmt.eleType != eleTypeUpdate {
-		return nil, errExecutionInvalidSqlType
+		return nil, ErrExecutionInvalidSqlType
 	}
 
 	return execute(man, stmt, v...)
@@ -132,7 +132,7 @@ func (man *QueryMan) QueryWithStmt(stmtIdOrUserQuery string, v ...interface{}) *
 	}
 
 	if stmt.eleType != eleTypeSelect {
-		return newQueryResultError(errQueryInvalidSqlType)
+		return newQueryResultError(ErrQueryInvalidSqlType)
 	}
 
 	queryedRow := queryMultiRow(man, stmt, v...)
@@ -154,7 +154,7 @@ func (man *QueryMan) QueryRowWithStmt(stmtIdOrUserQuery string, v ...interface{}
 	}
 
 	if stmt.eleType != eleTypeSelect {
-		return newQueryRowResultError(errQueryInvalidSqlType)
+		return newQueryRowResultError(ErrQueryInvalidSqlType)
 	}
 
 	var queryRowResult *QueryRowResult

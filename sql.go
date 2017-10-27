@@ -56,7 +56,7 @@ func execute(sqlProxy SqlProxy, stmt QueryStatement, v ...interface{}) (result s
 		atype = atype.Elem()
 		if reflect.ValueOf(val).IsNil() {
 			result = nil
-			err = errNilPtr
+			err = ErrNilPtr
 			return
 		}
 		val = reflect.ValueOf(val).Elem().Interface()
@@ -64,9 +64,9 @@ func execute(sqlProxy SqlProxy, stmt QueryStatement, v ...interface{}) (result s
 
 	switch atype.Kind() {
 	case reflect.Interface :
-		return nil, errInterfaceIsNotSupported
+		return nil, ErrInterfaceIsNotSupported
 	case reflect.Ptr :
-		return nil, errPtrIsNotSupported
+		return nil, ErrPtrIsNotSupported
 	case reflect.Slice, reflect.Array :
 		return execList(sqlProxy, val, execStmt)
 	case reflect.Struct :
@@ -125,7 +125,7 @@ func execWithList(sqlProxy SqlProxy, stmt QueryStatement, args []interface{}) (s
 		atype = atype.Elem()
 
 		if reflect.ValueOf(args[0]).IsNil() {
-			return nil, errNilPtr
+			return nil, ErrNilPtr
 		}
 		val = reflect.ValueOf(val).Elem().Interface()
 	}
@@ -236,7 +236,7 @@ func doExecWithNestedMap(sqlProxy SqlProxy, stmt QueryStatement, args []interfac
 	for i, v := range args {
 		m, ok := v.(map[string]interface{})
 		if !ok {
-			return i, result, errInvalidMapType
+			return i, result, ErrInvalidMapType
 		}
 
 		param := make([]interface{}, 0)
@@ -297,7 +297,7 @@ func doExecWithStructList(sqlProxy SqlProxy, stmt QueryStatement, args []interfa
 		if atype.Kind() == reflect.Ptr {
 			atype = atype.Elem()
 			if reflect.ValueOf(v).IsNil() {
-				return i, result, errNilPtr
+				return i, result, ErrNilPtr
 			}
 			val = reflect.ValueOf(v).Elem().Interface()
 		}
@@ -346,7 +346,7 @@ func flattenToMap(v interface{}) map[string]interface{} {
 	passing := make(map[string]interface{})
 	for _, k := range s.MapKeys() {
 		if k.Kind() != reflect.String {
-			panic(errInvalidMapKeyType.Error())
+			panic(ErrInvalidMapKeyType.Error())
 		}
 		v := s.MapIndex(k)
 		passing[k.String()] = v.Interface()
@@ -404,16 +404,16 @@ func queryMultiRow(sqlProxy SqlProxy, stmt QueryStatement, v ...interface{}) (qu
 	if atype.Kind() == reflect.Ptr {
 		atype = atype.Elem()
 		if reflect.ValueOf(val).IsNil() {
-			return newQueryResultError(errNilPtr)
+			return newQueryResultError(ErrNilPtr)
 		}
 		val = reflect.ValueOf(val).Elem().Interface()
 	}
 
 	switch atype.Kind() {
 	case reflect.Interface :
-		return newQueryResultError(errInterfaceIsNotSupported)
+		return newQueryResultError(ErrInterfaceIsNotSupported)
 	case reflect.Ptr :
-		return newQueryResultError(errPtrIsNotSupported)
+		return newQueryResultError(ErrPtrIsNotSupported)
 	case reflect.Slice, reflect.Array :
 		return queryList(sqlProxy, val, execStmt)
 	case reflect.Struct :
@@ -443,7 +443,7 @@ func refineConditional(stmt QueryStatement, v ...interface{}) (QueryStatement, e
 	if atype.Kind() == reflect.Ptr {
 		atype = atype.Elem()
 		if reflect.ValueOf(val).IsNil() {
-			return stmt, errNilPtr
+			return stmt, ErrNilPtr
 		}
 		val = reflect.ValueOf(val).Elem().Interface()
 	}

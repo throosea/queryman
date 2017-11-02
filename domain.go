@@ -28,6 +28,7 @@ import (
 	"errors"
 	"strings"
 	"fmt"
+	"bytes"
 )
 
 const (
@@ -86,6 +87,13 @@ type SqlProxy interface {
 	query(query string, args ...interface{}) (*sql.Rows, error)
 	queryRow(query string, args ...interface{}) *sql.Row
 	prepare(query string) (*sql.Stmt, error)
+	SqlDebugger
+}
+
+type SqlDebugger interface {
+	debugEnabled() bool
+	debugPrint(string, ...interface{})
+	recordExcution(stmtId string, startMillis int)
 }
 
 type QueryStatementFinder interface {
@@ -115,6 +123,19 @@ func (stmt QueryStatement) clone() QueryStatement {
 func (stmt QueryStatement) String() string {
 	return fmt.Sprintf("eleType=[%s], id=[%s], query=[%s], caluse=[%v], columns=[%v]",
 			stmt.eleType, stmt.Id, stmt.Query, stmt.clause, stmt.columnMention)
+}
+
+func (stmt QueryStatement) Debug(param ...interface{}) string {
+	var buffer bytes.Buffer
+	buffer.WriteString(fmt.Sprintf("[%s] %s", stmt.Id, stmt.Query))
+	if len(param) > 0 {
+		buffer.WriteString(fmt.Sprintf("\n[%s] params : ", stmt.Id))
+		for _, v := range param {
+			buffer.WriteString(fmt.Sprintf("[%v] ", v))
+		}
+	}
+
+	return buffer.String()
 }
 
 func (stmt QueryStatement) HasCondition() bool {

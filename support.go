@@ -30,6 +30,7 @@ import (
 	"unicode"
 	"reflect"
 	"database/sql"
+	"time"
 )
 
 const (
@@ -225,4 +226,12 @@ func (ss *StructureScanner) Scan(value interface{}) error {
 	}
 
 	return convertAssign(dest, value)
+}
+
+func currentTimeMillis() int {
+	return int(time.Now().UnixNano() / 1000000)
+}
+
+func elapsedTimeMillis(startMillis int) int {
+	return currentTimeMillis() - startMillis
 }

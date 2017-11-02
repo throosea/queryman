@@ -182,13 +182,20 @@ func clearPreviousXmlFiles(path string, fileset string) {
 	}
 }
 
+func loggingSlowQuery(text string)	{
+	fmt.Printf("slowQuery : %s\n", text)
+}
+
 func TestConnection(t *testing.T) {
 	path := filepath.Dir(xmlFile)
-	querymanPref := NewQuerymanPreference(path, sourceName)
-	querymanPref.ConnMaxLifetime = time.Duration(time.Second * 10)
-	querymanPref.Fileset = xmlFilePrefix + "*.xml"
-	//querymanPref.Debug = true
-	man, err := NewQueryman(querymanPref)
+	pref := NewQuerymanPreference(path, sourceName)
+	pref.ConnMaxLifetime = time.Duration(time.Second * 10)
+	pref.Fileset = xmlFilePrefix + "*.xml"
+	//pref.Debug = true
+	//pref.SlowQueryMillis = 1
+	//pref.SlowQueryFunc = loggingSlowQuery
+
+	man, err := NewQueryman(pref)
 	if err != nil {
 		t.Errorf("fail to create queryman : %s\n", err.Error())
 		return

@@ -32,6 +32,7 @@ type DBTransaction struct {
 	tx                 *sql.Tx
 	queryFinder        QueryStatementFinder
 	fieldNameConverter FieldNameConvertStrategy
+	debugger 			SqlDebugger
 }
 
 func (t *DBTransaction) Rollback() error {
@@ -43,8 +44,9 @@ func (t *DBTransaction) Commit() error {
 }
 
 
-func newTransaction(tx *sql.Tx, queryFinder QueryStatementFinder, fieldNameConverter FieldNameConvertStrategy) *DBTransaction {
+func newTransaction(debugger SqlDebugger, tx *sql.Tx, queryFinder QueryStatementFinder, fieldNameConverter FieldNameConvertStrategy) *DBTransaction {
 	dbTransaction := DBTransaction{}
+	dbTransaction.debugger = debugger
 	dbTransaction.tx = tx
 	dbTransaction.queryFinder = queryFinder
 	dbTransaction.fieldNameConverter = fieldNameConverter
@@ -65,6 +67,18 @@ func (t *DBTransaction) queryRow(query string, args ...interface{}) *sql.Row {
 
 func (t *DBTransaction) prepare(query string) (*sql.Stmt, error) {
 	return t.tx.Prepare(query)
+}
+
+func (t *DBTransaction) debugEnabled() bool	{
+	return t.debugger.debugEnabled()
+}
+
+func (t *DBTransaction) debugPrint(format string, params ...interface{})	{
+	t.debugger.debugPrint(format, params...)
+}
+
+func (t *DBTransaction) recordExcution(stmtId string, startMillis int)	{
+	t.debugger.recordExcution(stmtId, startMillis)
 }
 
 func (t *DBTransaction) Execute(v ...interface{}) (sql.Result, error) {
@@ -124,8 +138,13 @@ func (t *DBTransaction) QueryRowWithStmt(id string, v ...interface{}) *QueryRowR
 		return newQueryRowResultError(ErrQueryInvalidSqlType)
 	}
 
+	var queryRowResult *QueryRowResult
 	queryResult := queryMultiRow(t, stmt, v...)
-	queryRowResult := newQueryRowResult(queryResult.pstmt, queryResult.rows)
+	if queryResult.err != nil {
+		queryRowResult = newQueryRowResultError(queryResult.err)
+	} else {
+		queryRowResult = newQueryRowResult(queryResult.pstmt, queryResult.rows)
+	}
 	queryRowResult.fieldNameConverter = t.fieldNameConverter
 	return queryRowResult
 }

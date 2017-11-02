@@ -39,6 +39,9 @@ func execute(sqlProxy SqlProxy, stmt QueryStatement, v ...interface{}) (result s
 	}
 
 	if len(v) == 0 {
+		if sqlProxy.debugEnabled() {
+			sqlProxy.debugPrint("%s", stmt.Debug())
+		}
 		return sqlProxy.exec(execStmt.Query)
 	}
 
@@ -113,6 +116,10 @@ func execWithMap(sqlProxy SqlProxy, stmt QueryStatement, m map[string]interface{
 		param = append(param, found)
 	}
 
+	if sqlProxy.debugEnabled() {
+		sqlProxy.debugPrint("%s", stmt.Debug(param...))
+	}
+
 	return sqlProxy.exec(stmt.Query, param...)
 }
 
@@ -147,6 +154,14 @@ func execWithList(sqlProxy SqlProxy, stmt QueryStatement, args []interface{}) (s
 		return nil, fmt.Errorf("binding parameter count mismatch. defined=%d, args=%d", len(stmt.columnMention), len(args))
 	}
 
+	if sqlProxy.debugEnabled() {
+		sqlProxy.debugPrint("%s", stmt.Debug(args...))
+	}
+
+	startMillis := currentTimeMillis()
+	defer func() {
+		sqlProxy.recordExcution(stmt.Id, startMillis)
+	} ()
 	return sqlProxy.exec(stmt.Query, args...)
 }
 
@@ -181,13 +196,26 @@ func doExecWithNestedList(sqlProxy SqlProxy, stmt QueryStatement, args []interfa
 	}
 	defer pstmt.Close()
 
+	sqlProxy.debugPrint("[%s] %s", stmt.Id, stmt.Query)
 	result := ExecMultiResult{}
 	for i, v := range args {
 		passing := flattenToList(v)
+
+		if sqlProxy.debugEnabled() {
+			var buffer bytes.Buffer
+			buffer.WriteString(fmt.Sprintf("[%s] params : ", stmt.Id))
+			for _, v := range passing {
+				buffer.WriteString(fmt.Sprintf("[%v] ", v))
+			}
+			sqlProxy.debugPrint("%s", buffer.String())
+		}
+
+		startMillis := currentTimeMillis()
 		res, err := pstmt.Exec(passing...)
 		if err != nil {
 			return i, result, err
 		}
+		sqlProxy.recordExcution(stmt.Id, startMillis)
 		affectedCount, _ := res.RowsAffected()
 		result.rowAffected += affectedCount
 
@@ -233,6 +261,8 @@ func doExecWithNestedMap(sqlProxy SqlProxy, stmt QueryStatement, args []interfac
 	}
 	defer pstmt.Close()
 
+	sqlProxy.debugPrint("[%s] %s", stmt.Id, stmt.Query)
+
 	result := ExecMultiResult{}
 	for i, v := range args {
 		m, ok := v.(map[string]interface{})
@@ -249,10 +279,21 @@ func doExecWithNestedMap(sqlProxy SqlProxy, stmt QueryStatement, args []interfac
 			param = append(param, found)
 		}
 
+		if sqlProxy.debugEnabled() {
+			var buffer bytes.Buffer
+			buffer.WriteString(fmt.Sprintf("[%s] params : ", stmt.Id))
+			for _, v := range param {
+				buffer.WriteString(fmt.Sprintf("[%v] ", v))
+			}
+			sqlProxy.debugPrint("%s", buffer.String())
+		}
+
+		startMillis := currentTimeMillis()
 		res, err := pstmt.Exec(param...)
 		if err != nil {
 			return i, result, err
 		}
+		sqlProxy.recordExcution(stmt.Id, startMillis)
 		affectedCount, _ := res.RowsAffected()
 		result.rowAffected += affectedCount
 
@@ -289,6 +330,7 @@ func doExecWithStructList(sqlProxy SqlProxy, stmt QueryStatement, args []interfa
 	}
 	defer pstmt.Close()
 
+	sqlProxy.debugPrint("[%s] %s", stmt.Id, stmt.Query)
 	result := ExecMultiResult{}
 	for i, v := range args {
 		atype := reflect.TypeOf(v)
@@ -314,10 +356,21 @@ func doExecWithStructList(sqlProxy SqlProxy, stmt QueryStatement, args []interfa
 			param = append(param, found)
 		}
 
+		if sqlProxy.debugEnabled() {
+			var buffer bytes.Buffer
+			buffer.WriteString(fmt.Sprintf("[%s] params : ", stmt.Id))
+			for _, v := range param {
+				buffer.WriteString(fmt.Sprintf("[%v] ", v))
+			}
+			sqlProxy.debugPrint("%s", buffer.String())
+		}
+
+		startMillis := currentTimeMillis()
 		res, err := pstmt.Exec(param...)
 		if err != nil {
 			return i, result, err
 		}
+		sqlProxy.recordExcution(stmt.Id, startMillis)
 		affectedCount, _ := res.RowsAffected()
 		result.rowAffected += affectedCount
 
@@ -385,9 +438,14 @@ func queryMultiRow(sqlProxy SqlProxy, stmt QueryStatement, v ...interface{}) (qu
 			return newQueryResultError(err)
 		}
 
-		if debug {
-			debugLogger.Printf("[%s] %s\n", stmt.Id, execStmt.Query)
+		if sqlProxy.debugEnabled() {
+			sqlProxy.debugPrint("%s", stmt.Debug())
 		}
+
+		startMillis := currentTimeMillis()
+		defer func() {
+			sqlProxy.recordExcution(execStmt.Id, startMillis)
+		} ()
 		rows, err := pstmt.Query()
 		if err != nil {
 			return newQueryResultError(err)
@@ -496,21 +554,13 @@ func queryWithList(sqlProxy SqlProxy, stmt QueryStatement, args []interface{}) *
 		return newQueryResultError(err)
 	}
 
-	if debug {
-		var buffer bytes.Buffer
-		buffer.WriteString(fmt.Sprintf("[%s] %s\n", stmt.Id, stmt.Query))
-
-		debugLogger.Printf("[%s] %s\n", stmt.Id, stmt.Query)
-		if len(args) > 0 {
-			buffer.WriteString(fmt.Sprintf("[%s] params : ", stmt.Id))
-			for _, v := range args {
-				buffer.WriteString(fmt.Sprintf("[%v] ", v))
-			}
-		}
-
-		debugLogger.Printf("%s\n", buffer.String())
+	if sqlProxy.debugEnabled() {
+		sqlProxy.debugPrint("%s", stmt.Debug(args...))
 	}
-
+	startMillis := currentTimeMillis()
+	defer func() {
+		sqlProxy.recordExcution(stmt.Id, startMillis)
+	} ()
 	rows, err := pstmt.Query(args...)
 	if err != nil {
 		pstmt.Close()
@@ -540,22 +590,13 @@ func queryWithMap(sqlProxy SqlProxy, stmt QueryStatement, m map[string]interface
 	if err != nil {
 		return newQueryResultError(err)
 	}
-
-	if debug {
-		var buffer bytes.Buffer
-		buffer.WriteString(fmt.Sprintf("[%s] %s\n", stmt.Id, stmt.Query))
-
-		debugLogger.Printf("[%s] %s\n", stmt.Id, stmt.Query)
-		if len(param) > 0 {
-			buffer.WriteString(fmt.Sprintf("[%s] params : ", stmt.Id))
-			for _, v := range param {
-				buffer.WriteString(fmt.Sprintf("[%v] ", v))
-			}
-		}
-
-		debugLogger.Printf("%s\n", buffer.String())
+	if sqlProxy.debugEnabled() {
+		sqlProxy.debugPrint("%s", stmt.Debug(param...))
 	}
-
+	startMillis := currentTimeMillis()
+	defer func() {
+		sqlProxy.recordExcution(stmt.Id, startMillis)
+	} ()
 	rows, err := pstmt.Query(param...)
 	if err != nil {
 		pstmt.Close()

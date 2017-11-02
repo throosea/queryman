@@ -43,10 +43,35 @@ type Logger interface {
 }
 
 // DefaultLogger uses the stdlib log package for logging.
-var debugLogger Logger
-var debug		= false
-var slowQueryMillis int
-var slowQueryFunc func(string)
+//var debugLogger Logger
+//var debug		= false
+//var slowQueryMillis int
+//var slowQueryFunc func(string)
+//var queryExecutionChan = make(chan queryExecution, 256)
+
+type queryExecution struct {
+	close		bool
+	startMillis	int
+	elasedMillis int
+	stmtId		string
+}
+
+func newQueryExecution(stmtId string, startMillis int) queryExecution {
+	e := queryExecution{}
+	e.close = false
+	e.stmtId = stmtId
+	e.startMillis = startMillis
+	e.elasedMillis = elapsedTimeMillis(startMillis)
+	return e
+}
+
+func (s queryExecution) String() string {
+	if s.close {
+		return ""
+	}
+
+	return fmt.Sprintf("[%s] elased %d milliseconds", s.stmtId, s.elasedMillis)
+}
 
 type defaultLogger struct{}
 
@@ -107,16 +132,21 @@ func NewQueryman(pref QuerymanPreference) (*QueryMan, error) {
 		return nil, fmt.Errorf("fail to load xml file : %s [path=%s,fileset=%s]", err.Error(), pref.queryFilePath, pref.Fileset)
 	}
 
-	runtime.SetFinalizer(manager, close)
+	manager.execRecordChan = make(chan queryExecution, 256)
+	runtime.SetFinalizer(manager, closeQueryman)
 
-	debug = pref.Debug
-	if pref.DebugLogger != nil {
-		debugLogger = pref.DebugLogger
+	if manager.preference.SlowQueryMillis > 0 && manager.preference.SlowQueryFunc != nil {
+		go func() {
+			r := <-manager.execRecordChan
+			if r.close {
+				return
+			}
+
+			if r.elasedMillis > manager.preference.SlowQueryMillis {
+				manager.preference.SlowQueryFunc(r.String())
+			}
+		} ()
 	}
-	if pref.SlowQueryMillis > 0 {
-		slowQueryMillis = pref.SlowQueryMillis
-	}
-	slowQueryFunc = pref.SlowQueryFunc
 
 	return manager, nil
 }
@@ -281,6 +311,6 @@ func traverseIf(dec *xml.Decoder) {
 }
 
 
-func close(manager *QueryMan) {
+func closeQueryman(manager *QueryMan) {
 	manager.Close()
 }

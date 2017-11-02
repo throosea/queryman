@@ -41,6 +41,7 @@ type QueryMan struct {
 	preference         QuerymanPreference
 	statementMap       map[string]QueryStatement
 	fieldNameConverter FieldNameConvertStrategy
+	execRecordChan 	   chan queryExecution
 }
 
 func (man *QueryMan) GetSqlCount() int {
@@ -72,6 +73,11 @@ func (man *QueryMan) registStatement(queryStatement QueryStatement) error {
 }
 
 func (man *QueryMan) Close() error {
+	if man.execRecordChan != nil {
+		man.execRecordChan <- queryExecution{close:true}
+		close(man.execRecordChan)
+	}
+
 	return man.db.Close()
 }
 
@@ -89,6 +95,23 @@ func (man *QueryMan) queryRow(query string, args ...interface{}) *sql.Row {
 
 func (man *QueryMan) prepare(query string) (*sql.Stmt, error) {
 	return man.db.Prepare(query)
+}
+
+func (man *QueryMan) debugEnabled() bool	{
+	return man.preference.Debug
+}
+
+func (man *QueryMan) debugPrint(format string, params ...interface{})	{
+	if man.preference.Debug {
+		man.preference.DebugLogger.Printf(format, params...)
+	}
+}
+
+func (man *QueryMan) recordExcution(stmtId string, startMillis int)	{
+	if man.execRecordChan != nil {
+		man.execRecordChan <- newQueryExecution(stmtId, startMillis)
+	}
+
 }
 
 func (man *QueryMan) find(id string)	(QueryStatement, error) {
@@ -176,7 +199,7 @@ func (man *QueryMan) Begin() (*DBTransaction, error) {
 	}
 
 	runtime.SetFinalizer(tx, closeTransaction)
-	return newTransaction(tx, man, man.fieldNameConverter), nil
+	return newTransaction(man, tx, man, man.fieldNameConverter), nil
 }
 
 // you have to commit before closing transaction

@@ -28,6 +28,7 @@ import (
 	"fmt"
 	"reflect"
 	"database/sql/driver"
+	"bytes"
 )
 
 func execute(sqlProxy SqlProxy, stmt QueryStatement, v ...interface{}) (result sql.Result, err error) {
@@ -384,6 +385,9 @@ func queryMultiRow(sqlProxy SqlProxy, stmt QueryStatement, v ...interface{}) (qu
 			return newQueryResultError(err)
 		}
 
+		if debug {
+			debugLogger.Printf("[%s] %s\n", stmt.Id, execStmt.Query)
+		}
 		rows, err := pstmt.Query()
 		if err != nil {
 			return newQueryResultError(err)
@@ -492,6 +496,21 @@ func queryWithList(sqlProxy SqlProxy, stmt QueryStatement, args []interface{}) *
 		return newQueryResultError(err)
 	}
 
+	if debug {
+		var buffer bytes.Buffer
+		buffer.WriteString(fmt.Sprintf("[%s] %s\n", stmt.Id, stmt.Query))
+
+		debugLogger.Printf("[%s] %s\n", stmt.Id, stmt.Query)
+		if len(args) > 0 {
+			buffer.WriteString(fmt.Sprintf("[%s] params : ", stmt.Id))
+			for _, v := range args {
+				buffer.WriteString(fmt.Sprintf("[%v] ", v))
+			}
+		}
+
+		debugLogger.Printf("%s\n", buffer.String())
+	}
+
 	rows, err := pstmt.Query(args...)
 	if err != nil {
 		pstmt.Close()
@@ -520,6 +539,21 @@ func queryWithMap(sqlProxy SqlProxy, stmt QueryStatement, m map[string]interface
 	pstmt, err := sqlProxy.prepare(stmt.Query)
 	if err != nil {
 		return newQueryResultError(err)
+	}
+
+	if debug {
+		var buffer bytes.Buffer
+		buffer.WriteString(fmt.Sprintf("[%s] %s\n", stmt.Id, stmt.Query))
+
+		debugLogger.Printf("[%s] %s\n", stmt.Id, stmt.Query)
+		if len(param) > 0 {
+			buffer.WriteString(fmt.Sprintf("[%s] params : ", stmt.Id))
+			for _, v := range param {
+				buffer.WriteString(fmt.Sprintf("[%v] ", v))
+			}
+		}
+
+		debugLogger.Printf("%s\n", buffer.String())
 	}
 
 	rows, err := pstmt.Query(param...)

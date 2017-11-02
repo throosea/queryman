@@ -79,7 +79,7 @@ type City struct {
 }
 
 
-// go test -v -db=local -user=local -password=angel -host=10.211.55.7:3306
+// go test -v -db=local -user=local -password=angel -host=127.0.0.1:3306
 func TestMain(m *testing.M) {
 	prepareSourceName()
 
@@ -187,6 +187,7 @@ func TestConnection(t *testing.T) {
 	querymanPref := NewQuerymanPreference(path, sourceName)
 	querymanPref.ConnMaxLifetime = time.Duration(time.Second * 10)
 	querymanPref.Fileset = xmlFilePrefix + "*.xml"
+	//querymanPref.Debug = true
 	man, err := NewQueryman(querymanPref)
 	if err != nil {
 		t.Errorf("fail to create queryman : %s\n", err.Error())

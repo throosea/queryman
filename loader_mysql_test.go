@@ -38,11 +38,15 @@ var testData = []byte(`
 		<if key="VarK" exist="false">
 			AND k={varK}
 		</if>
+		<if key="VarB">
+			AND b={varB}
+		</if>
 		AND c={varC}
     </select>
 </query>
 `)
 
+// go test -v -db=local -user=local -password=angel -host=127.0.0.1:3306
 func TestLoaderSimple(t *testing.T) {
 	queryNormalizer = newNormalizer("mysql")
 
@@ -104,11 +108,11 @@ func TestLoaderSimple(t *testing.T) {
 	if teststmt.Id != "selectWhere" {
 		t.Fatalf("invalid second stmt id : %s", teststmt.Id)
 	}
-	expect := fmt.Sprintf(string(expect1), ifClauseWrappingKey,ifClauseWrappingKey,ifClauseWrappingKey,ifClauseWrappingKey)
+	expect := fmt.Sprintf(string(expect1), ifClauseWrappingKey,ifClauseWrappingKey,ifClauseWrappingKey,ifClauseWrappingKey, ifClauseWrappingKey,ifClauseWrappingKey)
 	if teststmt.Query != expect {
-		t.Fatalf("invalid second stmt query")
+		t.Fatalf("invalid second stmt query : expect=[%s], query=[%s]", expect, teststmt.Query)
 	}
-	if len(teststmt.clause) != 2 {
+	if len(teststmt.clause) != 3 {
 		t.Fatalf("invalid second stmt if cluase list")
 	}
 
@@ -122,12 +126,22 @@ func TestLoaderSimple(t *testing.T) {
 		t.Fatalf("invalid refined query")
 	}
 
+	m["VarB"] = struct{}{}
+	refinedStmt, err = teststmt.RefineStatement(m)
+	if err != nil {
+		t.Fatalf("fail to refine : %s", err.Error())
+	}
+
+	if len(strings.Split(refinedStmt.Query, "?")) != 6 {
+		t.Fatalf("invalid refined query")
+	}
+
 	m["VarK"] = struct{}{}
 	refinedStmt, err = teststmt.RefineStatement(m)
 	if err != nil {
 		t.Fatalf("fail to refine : %s", err.Error())
 	}
-	if len(strings.Split(refinedStmt.Query, "?")) != 3 {
+	if len(strings.Split(refinedStmt.Query, "?")) != 5 {
 		t.Fatalf("invalid refined query")
 	}
 }
@@ -136,6 +150,7 @@ var expect1 = []byte(`SELECT 1 FROM city
 		WHERE a={varA}
 		 %s0%s
 		 %s1%s
+		 %s2%s
 		AND c={varC}`)
 
 

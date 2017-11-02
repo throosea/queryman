@@ -34,7 +34,26 @@ import (
 	"database/sql"
 	"time"
 	"io"
+	"log"
 )
+
+// Logger is an interface that can be implemented to provide custom log output.
+type Logger interface {
+	Printf(string, ...interface{})
+}
+
+// DefaultLogger uses the stdlib log package for logging.
+var debugLogger Logger
+var debug		= false
+var slowQueryMillis int
+var slowQueryFunc func(string)
+
+type defaultLogger struct{}
+
+func (defaultLogger) Printf(format string, a ...interface{}) {
+	// do nothing...
+	log.Printf(format, a...)
+}
 
 type QuerymanPreference struct {
 	queryFilePath		string
@@ -44,6 +63,10 @@ type QuerymanPreference struct {
 	ConnMaxLifetime		time.Duration
 	MaxIdleConns		int
 	MaxOpenConns		int
+	Debug 				bool
+	DebugLogger			Logger
+	SlowQueryMillis		int
+	SlowQueryFunc		func(string)
 	fieldNameConvert	fieldNameConvertMethod
 }
 
@@ -56,6 +79,8 @@ func NewQuerymanPreference(filepath string, dataSourceName string) QuerymanPrefe
 	pref.ConnMaxLifetime = time.Duration(time.Second * 60)
 	pref.MaxIdleConns = 1
 	pref.MaxOpenConns = 10
+	pref.Debug = false
+	pref.DebugLogger = defaultLogger{}
 	pref.fieldNameConvert = fieldNameConvertToCamel
 
 	return pref
@@ -83,6 +108,16 @@ func NewQueryman(pref QuerymanPreference) (*QueryMan, error) {
 	}
 
 	runtime.SetFinalizer(manager, close)
+
+	debug = pref.Debug
+	if pref.DebugLogger != nil {
+		debugLogger = pref.DebugLogger
+	}
+	if pref.SlowQueryMillis > 0 {
+		slowQueryMillis = pref.SlowQueryMillis
+	}
+	slowQueryFunc = pref.SlowQueryFunc
+
 	return manager, nil
 }
 

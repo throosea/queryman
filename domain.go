@@ -64,6 +64,7 @@ func buildElementType(stmt string) declareElementType	{
 	case "select" :	return eleTypeSelect
 	case "insert" :	return eleTypeInsert
 	case "update" :	return eleTypeUpdate
+	case "delete" :	return eleTypeUpdate
 	case "if" :	return eleTypeIf
 	}
 	return eleTypeUnknown

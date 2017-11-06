@@ -70,6 +70,11 @@ func (man *QueryMan) registStatement(queryStatement QueryStatement) error {
 	}
 
 	man.statementMap[id] = queryStatement
+
+	if man.preference.Debug {
+		man.preference.DebugLogger.Printf("stmt [%s] loaded", id)
+	}
+
 	return nil
 }
 

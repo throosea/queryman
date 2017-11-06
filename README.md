@@ -57,6 +57,8 @@ below xml file is sample
 </query>
 ```
 
+tags : insert, update, delete, select
+
 # Install #
 ```
 go get throosea.com/queryman

@@ -414,7 +414,7 @@ func queryBare() {
 	city := &City{}
 	city.Name = "initial city name"
 	sample := HasUnexportedFieldCity{Name:"unexported_field"}
-	result := queryManager.Query(sqlSelectCityWithName, sample)
+	result := queryManager.QueryWithStmt(sqlSelectCityWithName, sample)
 	if result.GetError() != nil {
 		log.Errorf(result.GetError().Error())
 		return
@@ -450,7 +450,7 @@ func queryWithMap() {
 
 	m := make(map[string]string)
 	m["Name"] = "map_name"
-	result := queryManager.Query(sqlSelectCityWithName, m)
+	result := queryManager.QueryWithStmt(sqlSelectCityWithName, m)
 	if result.GetError() != nil {
 		log.Errorf(result.GetError().Error())
 		return
@@ -478,6 +478,39 @@ func queryWithMap() {
 
 ```
 
+# Working with stmt id #
+
+If you describe SQL in xml, you should define stmt id in xml too.
+e.g) <select id='SelectDual'> ... </select>
+
+queryman functions will use function name as stmt id basically.
+
+
+```
+#!go
+
+// ...
+
+func selectDual() {
+	// Query will use stmt id as 'selectDual' (function name)
+	_, err := queryManager.Query()
+	if err != nil {
+		log.Error(err.Error())
+		return
+	}
+
+	// You can use another stmt id with XXXWithStmt(stmtId string, ...)
+	_, err := queryManager.QueryWithStmt("selectAnother")
+	if err != nil {
+		log.Error(err.Error())
+		return
+	}
+
+```
+
+please note all stmt id will be compared ignoring character sensitive
+
+
 # Queryman Preference Properties #
 
 You can set logging preference. below is preference properties
@@ -489,3 +522,43 @@ DriverName | string | "mysql" | database driver name
 ConnMaxLifetime | time.Duration | 60s | max connection life time while idling
 MaxIdleConns | int | 1 | max idle db connections
 MaxOpenConns | int | 10 | max open db connections
+Debug | bool | false | debugging mode
+DebugLogger | queryman.Logger | queryman.defaultLogger | debug logger
+SlowQueryDuration | time.Duration | 0 | slow query checking time duration
+SlowQueryFunc | func | nil | slow query notification func
+
+# Queryman Preference Sample #
+
+
+```
+#!go
+
+// ...
+
+func SampleFunc() {
+	path := filepath.Dir(xmlFile)
+	pref := NewQuerymanPreference(path, sourceName)
+	pref.ConnMaxLifetime = time.Duration(time.Second * 10)
+	pref.Fileset = xmlFilePrefix + "*.xml"
+	pref.Debug = true
+	pref.SlowQueryMillis = time.Second * 10
+	pref.SlowQueryFunc = loggingSlowQuery
+
+	man, err := NewQueryman(pref)
+	if err != nil {
+		t.Errorf("fail to create queryman : %s\n", err.Error())
+		return
+	}
+
+	...
+}
+
+func loggingSlowQuery(text string)	{
+	fmt.Printf("slowQuery : %s\n", text)
+}
+
+```
+
+
+
+

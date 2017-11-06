@@ -499,7 +499,7 @@ func selectDual() {
 		return
 	}
 
-	// You can use another stmt id with XXXWithStmt(stmtId string, ...)
+	// You can specify stmt id with xxxWithStmt(stmtId string, ...)
 	_, err := queryManager.QueryWithStmt("selectAnother")
 	if err != nil {
 		log.Error(err.Error())
@@ -510,6 +510,48 @@ func selectDual() {
 
 please note all stmt id will be compared ignoring character sensitive
 
+# Dynamic SQL #
+
+queryman support '<if>' tag for dynamic sql support.
+'if' tag has 'exist' attribute present bool. if 'exist' arrtibute omitted, default value is true.
+if you want to use dynamic sql, you have to pass parameters as map.
+
+
+```
+<?xml version="1.0" encoding="UTF-8" ?>
+<query>
+	<select id="loadAllTokens">
+        SELECT token
+        FROM member
+        WHERE token IS NOT NULL
+        <if key="OSType">
+            AND os_type={OSType}
+        </if>
+        <if key="OSType" exist="false">
+            AND os_type IS NOT NULL
+        </if>
+    </select>
+</query>
+```
+
+```
+#!go
+
+// ...
+
+func loadAllTokens(item PushItem) {
+	// ...
+
+	m := make(map[string]interface{})
+	if item.SendTargetOsType != OsTypeAll {
+		m["OSType"] = item.SendTargetOsType
+	}
+
+	result := database.Query(m)
+
+	...
+}
+```
 
 # Queryman Preference Properties #
 

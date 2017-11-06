@@ -1,6 +1,6 @@
 # Golang xml base DB Query Manager #
 
-Package throosea.com/queryman implements a xml base query infrastructure for Go.
+Package throosea.com/queryman implements a xml base RDBMS SQL query infrastructure for Go.
 
 below xml file is sample 
 
@@ -37,6 +37,23 @@ below xml file is sample
 	<select id="CountCity">
 		SELECT Count(*) FROM CITY
 	</select>
+	<select id="selectCdataSample">
+		SELECT 1 FROM <![CDATA[dual]]>
+    </select>
+    <select id="selectDynamicQuery">
+		SELECT 1 FROM city
+		WHERE a={varA}
+		<if key="VarB">
+			AND b={varB}
+		</if>
+		<if key="VarK" exist="false">
+			AND k={varK}
+		</if>
+		<if key="VarB">
+			AND b={varB}
+		</if>
+		AND c={varC}
+    </select>
 </query>
 ```
 
@@ -115,12 +132,12 @@ func main() {
 }
 
 func dropAndCreateTable() error {
-	_, err := queryManager.Execute(sqlDropCityTable)
+	_, err := queryManager.ExecuteWithStmt(sqlDropCityTable)
 	if err != nil {
 		return fmlog.Errorf("fail to execute(%s) : %s\n", sqlDropCityTable, err.Error())
 	}
 
-	_, err = queryManager.Execute(sqlCreateCityTable)
+	_, err = queryManager.ExecuteWithStmt(sqlCreateCityTable)
 	if err != nil {
 		return fmlog.Errorf("fail to execute(%s) : %s\n", sqlCreateCityTable, err.Error())
 	}
@@ -128,11 +145,11 @@ func dropAndCreateTable() error {
 	return nil
 }
 
-
+// working with stmt id 'insertBareParams'
 func insertBareParams() {
 	setup()
 
-	result, err := queryManager.Execute(sqlInsertCity, "bare param", 42, true, 40.0, time.Now(), nil)
+	result, err := queryManager.Execute("bare param", 42, true, 40.0, time.Now(), nil)
 	if err != nil {
 		log.Error(err.Error())
 		return
@@ -150,6 +167,7 @@ func insertBareParams() {
 	}
 }
 
+// working with stmt id 'insertSlice'
 func insertSlice() {
 	args := make([]interface{}, 0)
 	args = append(args, "sample city")
@@ -158,7 +176,7 @@ func insertSlice() {
 	args = append(args, 40.0)
 	args = append(args, time.Now())
 	args = append(args, nil)
-	result, err := queryManager.Execute(sqlInsertCity, args)
+	result, err := queryManager.Execute(args)
 	if err != nil {
 		log.Error(err.Error())
 		return
@@ -176,16 +194,18 @@ func createCity() City {
 	return city
 }
 
+// working with stmt id 'insertObject'
 func insertObject() {
 	city := createCity()
 
-	result, err := queryManager.Execute(sqlInsertCity, city)
+	result, err := queryManager.Execute(city)
 	if err != nil {
 		log.Error(err.Error())
 		return
 	}
 }
 
+// working with stmt id 'insertMap'
 func insertMap() {
 	args := make(map[string]interface{})
 	args["Name"] = "map name"
@@ -195,13 +215,14 @@ func insertMap() {
 	args["CreateTime"] = time.Now()
 	args["UpdateTime"] = time.Now()
 
-	result, err := queryManager.Execute(sqlInsertCity, args)
+	result, err := queryManager.Execute(args)
 	if err != nil {
 		log.Error(err.Error())
 		return
 	}
 }
 
+// working with stmt id 'insertNestedSlice'
 func insertNestedSlice() {
 	params := make([][]interface{}, 0)
 
@@ -247,7 +268,7 @@ func transactionInsert() {
 	city := createCity()
 	tx, err := queryManager.Begin()
 	defer tx.Rollback()
-	result, err := tx.Execute(sqlInsertCity, city)
+	result, err := tx.ExecuteWithStmt(sqlInsertCity, city)
 	if err != nil {
 		log.Error(err.Error())
 		return
@@ -279,7 +300,7 @@ func transactionInsert() {
 
 
 func queryButNoMoreData() {
-	result := queryManager.Query(sqlSelectCityWithName, "sample city") // time is null
+	result := queryManager.QueryWithStmt(sqlSelectCityWithName, "sample city") // time is null
 	if result.GetError() != nil {
 		log.Error(result.GetError())
 		return
@@ -296,14 +317,14 @@ func queryButNoMoreData() {
 
 func queryOneObject() {
 	// insert sample
-	_, err := queryManager.Execute(sqlInsertCity, "bare param", 42, true, 40.0, time.Now(), nil)
+	_, err := queryManager.ExecuteWithStmt(sqlInsertCity, "bare param", 42, true, 40.0, time.Now(), nil)
 	if err != nil {
 		log.Error(err.Error())
 		return
 	}
 
 	city := &City{}
-	result := queryManager.Query(sqlSelectCityWithName, "bare param") // time is null
+	result := queryManager.QueryWithStmt(sqlSelectCityWithName, "bare param") // time is null
 	if result.GetError() != nil {
 		log.Error(result.GetError())
 		return
@@ -327,7 +348,7 @@ func queryOneObject() {
 
 func queryRowBare() {
 	// insert sample
-	_, err := queryManager.Execute(sqlInsertCity, "sample_city", 42, true, 40.0, time.Now(), time.Now())
+	_, err := queryManager.ExecuteWithStmt(sqlInsertCity, "sample_city", 42, true, 40.0, time.Now(), time.Now())
 	if err != nil {
 		log.Error(err.Error())
 		return
@@ -348,7 +369,7 @@ func queryRowBare() {
 
 func queryRowStruct() {
 	// insert sample
-	_, err := queryManager.Execute(sqlInsertCity, "unexported_field", 42, true, 40.0, time.Now(), time.Now())
+	_, err := queryManager.ExecuteWithStmt(sqlInsertCity, "unexported_field", 42, true, 40.0, time.Now(), time.Now())
 	if err != nil {
 		log.Error(err.Error())
 		return
@@ -366,7 +387,7 @@ func queryRowStruct() {
 
 	city := NullableCity{}
 
-	err = queryManager.QueryRow(sqlSelectCityWithName, "unexported_field").Scan(&city)
+	err = queryManager.QueryRowWithStmt(sqlSelectCityWithName, "unexported_field").Scan(&city)
 	if err != nil {
 		log.Error(err.Error())
 		return
@@ -379,7 +400,7 @@ func queryRowStruct() {
 
 func queryBare() {
 	// insert sample
-	_, err := queryManager.Execute(sqlInsertCity, "unexported_field", 42, true, 40.0, time.Now(), time.Now())
+	_, err := queryManager.ExecuteWithStmt(sqlInsertCity, "unexported_field", 42, true, 40.0, time.Now(), time.Now())
 	if err != nil {
 		log.Error(err.Error())
 		return
@@ -421,7 +442,7 @@ func queryBare() {
 
 func queryWithMap() {
 	// insert sample
-	_, err := queryManager.Execute(sqlInsertCity, "map_name", 42, true, 40.0, time.Now(), time.Now())
+	_, err := queryManager.ExecuteWithStmt(sqlInsertCity, "map_name", 42, true, 40.0, time.Now(), time.Now())
 	if err != nil {
 		log.Error(err.Error())
 		return

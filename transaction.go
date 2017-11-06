@@ -26,6 +26,7 @@ package queryman
 import (
 	"database/sql"
 	"runtime"
+	"time"
 )
 
 type DBTransaction struct {
@@ -77,8 +78,8 @@ func (t *DBTransaction) debugPrint(format string, params ...interface{})	{
 	t.debugger.debugPrint(format, params...)
 }
 
-func (t *DBTransaction) recordExcution(stmtId string, startMillis int)	{
-	t.debugger.recordExcution(stmtId, startMillis)
+func (t *DBTransaction) recordExcution(stmtId string, start time.Time)	{
+	t.debugger.recordExcution(stmtId, start)
 }
 
 func (t *DBTransaction) Execute(v ...interface{}) (sql.Result, error) {

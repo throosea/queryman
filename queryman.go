@@ -28,6 +28,7 @@ import (
 	"strings"
 	"fmt"
 	"runtime"
+	"time"
 )
 
 var queryNormalizer         QueryNormalizer
@@ -107,9 +108,9 @@ func (man *QueryMan) debugPrint(format string, params ...interface{})	{
 	}
 }
 
-func (man *QueryMan) recordExcution(stmtId string, startMillis int)	{
+func (man *QueryMan) recordExcution(stmtId string, start time.Time)	{
 	if man.execRecordChan != nil {
-		man.execRecordChan <- newQueryExecution(stmtId, startMillis)
+		man.execRecordChan <- newQueryExecution(stmtId, start)
 	}
 
 }

@@ -29,6 +29,7 @@ import (
 	"strings"
 	"fmt"
 	"bytes"
+	"time"
 )
 
 const (
@@ -93,7 +94,7 @@ type SqlProxy interface {
 type SqlDebugger interface {
 	debugEnabled() bool
 	debugPrint(string, ...interface{})
-	recordExcution(stmtId string, startMillis int)
+	recordExcution(stmtId string, start time.Time)
 }
 
 type QueryStatementFinder interface {

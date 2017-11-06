@@ -42,26 +42,19 @@ type Logger interface {
 	Printf(string, ...interface{})
 }
 
-// DefaultLogger uses the stdlib log package for logging.
-//var debugLogger Logger
-//var debug		= false
-//var slowQueryMillis int
-//var slowQueryFunc func(string)
-//var queryExecutionChan = make(chan queryExecution, 256)
-
 type queryExecution struct {
 	close		bool
-	startMillis	int
-	elasedMillis int
+	start		time.Time
+	elased		time.Duration
 	stmtId		string
 }
 
-func newQueryExecution(stmtId string, startMillis int) queryExecution {
+func newQueryExecution(stmtId string, start time.Time) queryExecution {
 	e := queryExecution{}
 	e.close = false
 	e.stmtId = stmtId
-	e.startMillis = startMillis
-	e.elasedMillis = elapsedTimeMillis(startMillis)
+	e.start = start
+	e.elased = time.Duration(time.Now().UnixNano() - start.UnixNano())
 	return e
 }
 
@@ -70,7 +63,7 @@ func (s queryExecution) String() string {
 		return ""
 	}
 
-	return fmt.Sprintf("[%s] elased %d milliseconds", s.stmtId, s.elasedMillis)
+	return fmt.Sprintf("[%s] elased %d milliseconds", s.stmtId, s.elased / 1000000)
 }
 
 type defaultLogger struct{}
@@ -81,30 +74,31 @@ func (defaultLogger) Printf(format string, a ...interface{}) {
 }
 
 type QuerymanPreference struct {
-	queryFilePath		string
-	Fileset				string
-	DriverName			string
-	dataSourceName		string
-	ConnMaxLifetime		time.Duration
-	MaxIdleConns		int
-	MaxOpenConns		int
-	Debug 				bool
-	DebugLogger			Logger
-	SlowQueryMillis		int
-	SlowQueryFunc		func(string)
-	fieldNameConvert	fieldNameConvertMethod
+	queryFilePath     string
+	Fileset           string
+	DriverName        string
+	dataSourceUrl     string
+	ConnMaxLifetime   time.Duration
+	MaxIdleConns      int
+	MaxOpenConns      int
+	Debug             bool
+	DebugLogger       Logger
+	SlowQueryDuration time.Duration
+	SlowQueryFunc     func(string)
+	fieldNameConvert  fieldNameConvertMethod
 }
 
-func NewQuerymanPreference(filepath string, dataSourceName string) QuerymanPreference {
+func NewQuerymanPreference(filepath string, dataSourceUrl string) QuerymanPreference {
 	pref := QuerymanPreference{}
 	pref.queryFilePath = filepath
 	pref.Fileset = "*.xml"
 	pref.DriverName = "mysql"		// default
-	pref.dataSourceName = dataSourceName
+	pref.dataSourceUrl = dataSourceUrl
 	pref.ConnMaxLifetime = time.Duration(time.Second * 60)
 	pref.MaxIdleConns = 1
 	pref.MaxOpenConns = 10
 	pref.Debug = false
+	pref.SlowQueryDuration = 0
 	pref.DebugLogger = defaultLogger{}
 	pref.fieldNameConvert = fieldNameConvertToCamel
 
@@ -116,7 +110,7 @@ func NewQueryman(pref QuerymanPreference) (*QueryMan, error) {
 	manager.preference = pref
 	manager.statementMap = make(map[string]QueryStatement)
 
-	db, err := sql.Open(pref.DriverName, pref.dataSourceName)
+	db, err := sql.Open(pref.DriverName, pref.dataSourceUrl)
 	if err != nil {
 		return nil, fmt.Errorf("fail to open sql : %s", err.Error())
 	}
@@ -135,14 +129,14 @@ func NewQueryman(pref QuerymanPreference) (*QueryMan, error) {
 	manager.execRecordChan = make(chan queryExecution, 256)
 	runtime.SetFinalizer(manager, closeQueryman)
 
-	if manager.preference.SlowQueryMillis > 0 && manager.preference.SlowQueryFunc != nil {
+	if manager.preference.SlowQueryDuration > 0 && manager.preference.SlowQueryFunc != nil {
 		go func() {
 			r := <-manager.execRecordChan
 			if r.close {
 				return
 			}
 
-			if r.elasedMillis > manager.preference.SlowQueryMillis {
+			if r.elased > manager.preference.SlowQueryDuration {
 				manager.preference.SlowQueryFunc(r.String())
 			}
 		} ()

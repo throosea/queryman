@@ -29,6 +29,7 @@ import (
 	"reflect"
 	"database/sql/driver"
 	"bytes"
+	"time"
 )
 
 func execute(sqlProxy SqlProxy, stmt QueryStatement, v ...interface{}) (result sql.Result, err error) {
@@ -158,9 +159,9 @@ func execWithList(sqlProxy SqlProxy, stmt QueryStatement, args []interface{}) (s
 		sqlProxy.debugPrint("%s", stmt.Debug(args...))
 	}
 
-	startMillis := currentTimeMillis()
+	start := time.Now()
 	defer func() {
-		sqlProxy.recordExcution(stmt.Id, startMillis)
+		sqlProxy.recordExcution(stmt.Id, start)
 	} ()
 	return sqlProxy.exec(stmt.Query, args...)
 }
@@ -210,12 +211,12 @@ func doExecWithNestedList(sqlProxy SqlProxy, stmt QueryStatement, args []interfa
 			sqlProxy.debugPrint("%s", buffer.String())
 		}
 
-		startMillis := currentTimeMillis()
+		start := time.Now()
 		res, err := pstmt.Exec(passing...)
 		if err != nil {
 			return i, result, err
 		}
-		sqlProxy.recordExcution(stmt.Id, startMillis)
+		sqlProxy.recordExcution(stmt.Id, start)
 		affectedCount, _ := res.RowsAffected()
 		result.rowAffected += affectedCount
 
@@ -288,12 +289,12 @@ func doExecWithNestedMap(sqlProxy SqlProxy, stmt QueryStatement, args []interfac
 			sqlProxy.debugPrint("%s", buffer.String())
 		}
 
-		startMillis := currentTimeMillis()
+		start := time.Now()
 		res, err := pstmt.Exec(param...)
 		if err != nil {
 			return i, result, err
 		}
-		sqlProxy.recordExcution(stmt.Id, startMillis)
+		sqlProxy.recordExcution(stmt.Id, start)
 		affectedCount, _ := res.RowsAffected()
 		result.rowAffected += affectedCount
 
@@ -365,12 +366,12 @@ func doExecWithStructList(sqlProxy SqlProxy, stmt QueryStatement, args []interfa
 			sqlProxy.debugPrint("%s", buffer.String())
 		}
 
-		startMillis := currentTimeMillis()
+		start := time.Now()
 		res, err := pstmt.Exec(param...)
 		if err != nil {
 			return i, result, err
 		}
-		sqlProxy.recordExcution(stmt.Id, startMillis)
+		sqlProxy.recordExcution(stmt.Id, start)
 		affectedCount, _ := res.RowsAffected()
 		result.rowAffected += affectedCount
 
@@ -442,9 +443,9 @@ func queryMultiRow(sqlProxy SqlProxy, stmt QueryStatement, v ...interface{}) (qu
 			sqlProxy.debugPrint("%s", stmt.Debug())
 		}
 
-		startMillis := currentTimeMillis()
+		start := time.Now()
 		defer func() {
-			sqlProxy.recordExcution(execStmt.Id, startMillis)
+			sqlProxy.recordExcution(execStmt.Id, start)
 		} ()
 		rows, err := pstmt.Query()
 		if err != nil {
@@ -557,9 +558,9 @@ func queryWithList(sqlProxy SqlProxy, stmt QueryStatement, args []interface{}) *
 	if sqlProxy.debugEnabled() {
 		sqlProxy.debugPrint("%s", stmt.Debug(args...))
 	}
-	startMillis := currentTimeMillis()
+	start := time.Now()
 	defer func() {
-		sqlProxy.recordExcution(stmt.Id, startMillis)
+		sqlProxy.recordExcution(stmt.Id, start)
 	} ()
 	rows, err := pstmt.Query(args...)
 	if err != nil {
@@ -593,9 +594,9 @@ func queryWithMap(sqlProxy SqlProxy, stmt QueryStatement, m map[string]interface
 	if sqlProxy.debugEnabled() {
 		sqlProxy.debugPrint("%s", stmt.Debug(param...))
 	}
-	startMillis := currentTimeMillis()
+	start := time.Now()
 	defer func() {
-		sqlProxy.recordExcution(stmt.Id, startMillis)
+		sqlProxy.recordExcution(stmt.Id, start)
 	} ()
 	rows, err := pstmt.Query(param...)
 	if err != nil {

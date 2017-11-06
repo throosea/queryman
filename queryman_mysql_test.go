@@ -191,9 +191,9 @@ func TestConnection(t *testing.T) {
 	pref := NewQuerymanPreference(path, sourceName)
 	pref.ConnMaxLifetime = time.Duration(time.Second * 10)
 	pref.Fileset = xmlFilePrefix + "*.xml"
-	//pref.Debug = true
-	//pref.SlowQueryMillis = 1
-	//pref.SlowQueryFunc = loggingSlowQuery
+	pref.Debug = false
+	pref.SlowQueryDuration = time.Second * 10
+	pref.SlowQueryFunc = loggingSlowQuery
 
 	man, err := NewQueryman(pref)
 	if err != nil {
@@ -203,6 +203,7 @@ func TestConnection(t *testing.T) {
 	querymanStatus = statusNoTable
 	queryManager = man
 }
+
 
 func TestDDL(t *testing.T) {
 	if querymanStatus == statusDisconnected {

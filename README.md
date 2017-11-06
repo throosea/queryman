@@ -535,12 +535,11 @@ SlowQueryFunc | func | nil | slow query notification func
 
 // ...
 
-func SampleFunc() {
+func SlowQuerySampleFunc() {
 	path := filepath.Dir(xmlFile)
 	pref := NewQuerymanPreference(path, sourceName)
 	pref.ConnMaxLifetime = time.Duration(time.Second * 10)
 	pref.Fileset = xmlFilePrefix + "*.xml"
-	pref.Debug = true
 	pref.SlowQueryMillis = time.Second * 10
 	pref.SlowQueryFunc = loggingSlowQuery
 
@@ -556,6 +555,30 @@ func SampleFunc() {
 func loggingSlowQuery(text string)	{
 	fmt.Printf("slowQuery : %s\n", text)
 }
+
+func DebugSampleFunc() {
+	path := filepath.Dir(xmlFile)
+	pref := NewQuerymanPreference(path, sourceName)
+	pref.ConnMaxLifetime = time.Duration(time.Second * 10)
+	pref.Fileset = xmlFilePrefix + "*.xml"
+	pref.Debug = true
+	pref.DebugLogger = myCustomLogger{}
+
+	man, err := NewQueryman(pref)
+	if err != nil {
+		t.Errorf("fail to create queryman : %s\n", err.Error())
+		return
+	}
+
+	...
+}
+
+type myCustomLogger struct{}
+
+func (myCustomLogger) Printf(format string, a ...interface{}) {
+	fmt.Printf(format, a...)
+}
+
 
 ```
 

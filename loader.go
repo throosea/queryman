@@ -126,10 +126,10 @@ func NewQueryman(pref QuerymanPreference) (*QueryMan, error) {
 		return nil, fmt.Errorf("fail to load xml file : %s [path=%s,fileset=%s]", err.Error(), pref.queryFilePath, pref.Fileset)
 	}
 
-	manager.execRecordChan = make(chan queryExecution, 256)
 	runtime.SetFinalizer(manager, closeQueryman)
 
 	if manager.preference.SlowQueryDuration > 0 && manager.preference.SlowQueryFunc != nil {
+		manager.execRecordChan = make(chan queryExecution, 256)
 		go func() {
 			r := <-manager.execRecordChan
 			if r.close {

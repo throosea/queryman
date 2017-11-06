@@ -35,6 +35,7 @@ import (
 	"time"
 	"io"
 	"log"
+	"math"
 )
 
 // Logger is an interface that can be implemented to provide custom log output.
@@ -129,7 +130,7 @@ func NewQueryman(pref QuerymanPreference) (*QueryMan, error) {
 	runtime.SetFinalizer(manager, closeQueryman)
 
 	if manager.preference.SlowQueryDuration > 0 && manager.preference.SlowQueryFunc != nil {
-		manager.execRecordChan = make(chan queryExecution, 256)
+		manager.execRecordChan = make(chan queryExecution, int(math.MaxUint16))
 		go func() {
 			r := <-manager.execRecordChan
 			if r.close {

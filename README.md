@@ -578,8 +578,8 @@ func SlowQuerySampleFunc() {
 	...
 }
 
-func loggingSlowQuery(text string)	{
-	fmt.Printf("slowQuery : %s\n", text)
+func loggingSlowQuery(stmtId string, start time.Time, elapsed time.Duration)	{
+	fmt.Printf("slowQuery : id=%s, start=%v, elased=%d milliseconds\n", stmtId, start, elapsed  / 1000000)
 }
 
 func DebugSampleFunc() {

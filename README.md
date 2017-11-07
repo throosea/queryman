@@ -100,7 +100,7 @@ func selectDual() {
 
 ```
 
-**`please note all stmt id will be compared ignoring character sensitive`**
+> **`please note all stmt id will be compared internally CASE INSENSITIVE`**
 
 # Example #
 
@@ -492,8 +492,10 @@ func queryWithMap() {
 # Dynamic SQL #
 
 queryman support '<if>' tag for dynamic sql support.
-'if' tag has 'exist' attribute present bool. **`if 'exist' arrtibute omitted, default value is true`**
-if you want to use dynamic sql, **`you have to pass parameters as map`**
+'if' tag has 'exist' attribute present bool. 
+> **`if 'exist' arrtibute omitted, default value is TRUE`**
+if you want to use dynamic sql, 
+> **`you have to pass parameters as MAP`**
 
 
 ```

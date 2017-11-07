@@ -1,6 +1,7 @@
 # Golang xml base DB Query Manager #
 
 Package throosea.com/queryman implements a xml base RDBMS SQL query infrastructure for Go.
+Queryman is an orm like mybatis(java) for golang.
 
 > current : tested with mysql 5.x
 

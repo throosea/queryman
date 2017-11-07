@@ -85,7 +85,7 @@ type QuerymanPreference struct {
 	Debug             bool
 	DebugLogger       Logger
 	SlowQueryDuration time.Duration
-	SlowQueryFunc     func(string, time.Time, time.Duration)
+	SlowQueryFunc     func(stmtId string, start time.Time, elapsed time.Duration)
 	fieldNameConvert  fieldNameConvertMethod
 }
 

@@ -493,7 +493,7 @@ func queryWithMap() {
 
 # Dynamic SQL #
 
-queryman support '<if>' tag for dynamic sql support.
+queryman supports '<if>' tag for dynamic sql.
 'if' tag has 'exist' attribute present bool. 
 > **`if 'exist' arrtibute omitted, default value is TRUE`**
 > if you want to use dynamic sql, 

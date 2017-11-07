@@ -494,7 +494,7 @@ func queryWithMap() {
 queryman support '<if>' tag for dynamic sql support.
 'if' tag has 'exist' attribute present bool. 
 > **`if 'exist' arrtibute omitted, default value is TRUE`**
-if you want to use dynamic sql, 
+> if you want to use dynamic sql, 
 > **`you have to pass parameters as MAP`**
 
 
@@ -528,6 +528,7 @@ func loadAllTokens(item PushItem) {
 		m["OSType"] = item.SendTargetOsType
 	}
 
+    // manipulated query will be 'SELECT token FROM member WHERE token IS NOT NULL AND os_type='some value'
 	result := database.Query(m)
 
 	...

@@ -565,7 +565,7 @@ func SlowQuerySampleFunc() {
 	path := filepath.Dir(xmlFile)
 	pref := NewQuerymanPreference(path, sourceName)
 	pref.ConnMaxLifetime = time.Duration(time.Second * 10)
-	pref.Fileset = xmlFilePrefix + "*.xml"
+	pref.Fileset = "query*.xml"
 	pref.SlowQueryMillis = time.Second * 10
 	pref.SlowQueryFunc = loggingSlowQuery
 

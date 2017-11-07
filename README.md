@@ -2,6 +2,8 @@
 
 Package throosea.com/queryman implements a xml base RDBMS SQL query infrastructure for Go.
 
+> current : tested with mysql 5.x
+
 below xml file is sample 
 
 ```

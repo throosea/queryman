@@ -34,9 +34,6 @@ below xml file is sample
 	<select id="SelectCityWithName">
 		SELECT * FROM CITY WHERE NAME like {Name}
 	</select>
-	<select id="CountCity">
-		SELECT Count(*) FROM CITY
-	</select>
 	<select id="selectCdataSample">
 		SELECT 1 FROM <![CDATA[dual]]>
     </select>
@@ -73,413 +70,6 @@ any other vendoring tools...
 ```
 
 
-# Example #
-
-```
-#!go
-
-package main
-
-import (
-	"throosea.com/log"
-	"errors"
-)
-
-
-const (
-	sqlDropCityTable = "DropCityTable"
-	sqlCreateCityTable = "CreateCityTable"
-	sqlInsertCity = "InsertCity"
-	sqlUpdateCityWithName = "UpdateCityWithName"
-	sqlSelectCityWithName = "SelectCityWithName"
-	sqlCountCity = "CountCity"
-)
-
-var queryManager *QueryMan
-
-func main() {
-	// prepare db source uri
-	sourceName := "user:pwd@tcp(127.0.0.1:3306)/mydb?timeout=10s"
-
-	// xml file dir
-	xmlFileDir := "/my/somewhere"
-
-	// create preference
-	querymanPref := NewQuerymanPreference(xmlFileDir, sourceName)
-	querymanPref.Fileset = "myquery*.xml"
-
-	// create queryman
-	man, err := NewQueryman(querymanPref)
-	if err != nil {
-		log.Info("fail to open queryman : %s", err.Error())
-		return
-	}
-	queryManager = man
-
-	// do work
-	dropAndCreateTable()
-	insertBareParams()
-	insertSlice()
-	insertObject()
-	insertMap()
-	insertNestedSlice()
-	transactionInsert()
-	queryOneObject()
-	queryBare()
-	queryWithMap()
-	queryRowStruct()
-	queryRowBare()
-	queryButNoMoreData()
-	// more samples in queryman_test.go file
-}
-
-func dropAndCreateTable() error {
-	_, err := queryManager.ExecuteWithStmt(sqlDropCityTable)
-	if err != nil {
-		return fmlog.Errorf("fail to execute(%s) : %s\n", sqlDropCityTable, err.Error())
-	}
-
-	_, err = queryManager.ExecuteWithStmt(sqlCreateCityTable)
-	if err != nil {
-		return fmlog.Errorf("fail to execute(%s) : %s\n", sqlCreateCityTable, err.Error())
-	}
-
-	return nil
-}
-
-// working with stmt id 'insertBareParams'
-func insertBareParams() {
-	setup()
-
-	result, err := queryManager.Execute("bare param", 42, true, 40.0, time.Now(), nil)
-	if err != nil {
-		log.Error(err.Error())
-		return
-	}
-
-	id, err := result.LastInsertId()
-	if err != nil {
-		log.Error(err.Error())
-		return
-	}
-
-	if id != 1 {
-		log.Error("invalid last insert id : %d", id)
-		return
-	}
-}
-
-// working with stmt id 'insertSlice'
-func insertSlice() {
-	args := make([]interface{}, 0)
-	args = append(args, "sample city")
-	args = append(args, 42)
-	args = append(args, true)
-	args = append(args, 40.0)
-	args = append(args, time.Now())
-	args = append(args, nil)
-	result, err := queryManager.Execute(args)
-	if err != nil {
-		log.Error(err.Error())
-		return
-	}
-}
-
-func createCity() City {
-	city := City{}
-	city.Name = "jin.freestyle@gmail.com"
-	city.Age = 142
-	city.IsMan = true
-	city.Percentage = 43.4
-	city.CreateTime = time.Now()
-	city.UpdateTime = time.Now()
-	return city
-}
-
-// working with stmt id 'insertObject'
-func insertObject() {
-	city := createCity()
-
-	result, err := queryManager.Execute(city)
-	if err != nil {
-		log.Error(err.Error())
-		return
-	}
-}
-
-// working with stmt id 'insertMap'
-func insertMap() {
-	args := make(map[string]interface{})
-	args["Name"] = "map name"
-	args["Age"] = nil
-	args["IsMan"] = true
-	args["Percentage"] = 19.21
-	args["CreateTime"] = time.Now()
-	args["UpdateTime"] = time.Now()
-
-	result, err := queryManager.Execute(args)
-	if err != nil {
-		log.Error(err.Error())
-		return
-	}
-}
-
-// working with stmt id 'insertNestedSlice'
-func insertNestedSlice() {
-	params := make([][]interface{}, 0)
-
-	insertingCount := 5
-	for i:=0; i<insertingCount; i++ {
-		args := make([]interface{}, 0)
-		args = append(args, "sample city")
-		args = append(args, 42)
-		args = append(args, true)
-		args = append(args, 40.0)
-		args = append(args, time.Now())
-		args = append(args, nil)
-		params = append(params, args)
-	}
-
-	result, err := queryManager.Execute(sqlInsertCity, params)
-	if err != nil {
-		log.Error(err.Error())
-		return
-	}
-
-	affected, err := result.RowsAffected()
-	if err != nil {
-		log.Error(err.Error())
-		return
-	}
-
-	if int(affected) != insertingCount {
-		log.Error("invalid affected count : %d", insertingCount)
-		return
-	}
-
-	if pstmtResult, ok := result.(ExecMultiResult); ok  {
-		if len(pstmtResult.GetInsertIdList()) != insertingCount {
-			log.Error("inserted id count is not valid. %d", len(pstmtResult.GetInsertIdList()))
-		}
-	} else {
-		log.Error("result type is not ExecMultiResult")
-	}
-}
-
-func transactionInsert() {
-	city := createCity()
-	tx, err := queryManager.Begin()
-	defer tx.Rollback()
-	result, err := tx.ExecuteWithStmt(sqlInsertCity, city)
-	if err != nil {
-		log.Error(err.Error())
-		return
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		log.Error(err.Error())
-		return
-	}
-
-	affected, err := result.RowsAffected()
-	if err != nil {
-		log.Error(err.Error())
-		return
-	}
-
-	id, err := result.LastInsertId()
-	if err != nil {
-		log.Error(err.Error())
-		return
-	}
-
-	if id != 1 || affected != 1 {
-		log.Error("invalid result : id=%d, affected=%d", id, affected)
-		return
-	}
-}
-
-
-func queryButNoMoreData() {
-	result := queryManager.QueryWithStmt(sqlSelectCityWithName, "sample city") // time is null
-	if result.GetError() != nil {
-		log.Error(result.GetError())
-		return
-	}
-
-	defer result.Close()
-
-	if !result.Next() {
-		return
-	}
-
-	log.Error("should be no more data")
-}
-
-func queryOneObject() {
-	// insert sample
-	_, err := queryManager.ExecuteWithStmt(sqlInsertCity, "bare param", 42, true, 40.0, time.Now(), nil)
-	if err != nil {
-		log.Error(err.Error())
-		return
-	}
-
-	city := &City{}
-	result := queryManager.QueryWithStmt(sqlSelectCityWithName, "bare param") // time is null
-	if result.GetError() != nil {
-		log.Error(result.GetError())
-		return
-	}
-
-	defer result.Close()
-
-	if !result.Next() {
-		log.Error(errNoMoreData)
-		return
-	}
-
-	err = result.Scan(city)
-	if err != nil {
-		log.Errorf("fail to scan : %s", err.Error())
-		return
-	}
-}
-
-
-
-func queryRowBare() {
-	// insert sample
-	_, err := queryManager.ExecuteWithStmt(sqlInsertCity, "sample_city", 42, true, 40.0, time.Now(), time.Now())
-	if err != nil {
-		log.Error(err.Error())
-		return
-	}
-
-	count := 0
-	err = queryManager.QueryRow(sqlCountCity).Scan(&count)
-	if err != nil {
-		log.Error(err.Error())
-		return
-	}
-
-	if count != 1 {
-		log.Errorf("invalid city count %d", count)
-		return
-	}
-}
-
-func queryRowStruct() {
-	// insert sample
-	_, err := queryManager.ExecuteWithStmt(sqlInsertCity, "unexported_field", 42, true, 40.0, time.Now(), time.Now())
-	if err != nil {
-		log.Error(err.Error())
-		return
-	}
-
-	type NullableCity struct {
-		Id		sql.NullInt64
-		Name	sql.NullString
-		Age		sql.NullInt64
-		IsMan	sql.NullBool
-		Percentage sql.NullFloat64
-		CreateTime mysql.NullTime
-		UpdateTime mysql.NullTime
-	}
-
-	city := NullableCity{}
-
-	err = queryManager.QueryRowWithStmt(sqlSelectCityWithName, "unexported_field").Scan(&city)
-	if err != nil {
-		log.Error(err.Error())
-		return
-	}
-
-	if city.Age.Int64 != 42 {
-		log.Errorf("selecting mismatch")
-	}
-}
-
-func queryBare() {
-	// insert sample
-	_, err := queryManager.ExecuteWithStmt(sqlInsertCity, "unexported_field", 42, true, 40.0, time.Now(), time.Now())
-	if err != nil {
-		log.Error(err.Error())
-		return
-	}
-
-	type HasUnexportedFieldCity struct {
-		Name	string
-		help	string
-	}
-
-	city := &City{}
-	city.Name = "initial city name"
-	sample := HasUnexportedFieldCity{Name:"unexported_field"}
-	result := queryManager.QueryWithStmt(sqlSelectCityWithName, sample)
-	if result.GetError() != nil {
-		log.Errorf(result.GetError().Error())
-		return
-	}
-
-	defer result.Close()
-	var id int
-	var name string
-	var age int
-	var isMan bool
-	var percentage float32
-	var createTime time.Time
-	var updateTime time.Time
-
-	if !result.Next() {
-		log.Error(errNoMoreData)
-		return
-	}
-	err = result.Scan(&id, &name, &age, &isMan, &percentage, &createTime, &updateTime)
-	if err != nil {
-		log.Error(err.Error())
-		return
-	}
-}
-
-func queryWithMap() {
-	// insert sample
-	_, err := queryManager.ExecuteWithStmt(sqlInsertCity, "map_name", 42, true, 40.0, time.Now(), time.Now())
-	if err != nil {
-		log.Error(err.Error())
-		return
-	}
-
-	m := make(map[string]string)
-	m["Name"] = "map_name"
-	result := queryManager.QueryWithStmt(sqlSelectCityWithName, m)
-	if result.GetError() != nil {
-		log.Errorf(result.GetError().Error())
-		return
-	}
-
-	defer result.Close()
-	var id int
-	var name string
-	var age int
-	var isMan bool
-	var percentage float32
-	var createTime time.Time
-	var updateTime time.Time
-
-	if !result.Next() {
-		log.Error(errNoMoreData)
-		return
-	}
-	err = result.Scan(&id, &name, &age, &isMan, &percentage, &createTime, &updateTime)
-	if err != nil {
-		log.Error(err.Error())
-		return
-	}
-}
-
-```
-
 # Working with stmt id #
 
 If you describe SQL in xml, you should define stmt id in xml too.
@@ -510,13 +100,400 @@ func selectDual() {
 
 ```
 
-please note all stmt id will be compared ignoring character sensitive
+**`please note all stmt id will be compared ignoring character sensitive`**
+
+# Example #
+
+```
+#!go
+
+package main
+
+const (
+	sqlDropCityTable = "DropCityTable"
+	sqlCreateCityTable = "CreateCityTable"
+	sqlInsertCity = "InsertCity"
+	sqlUpdateCityWithName = "UpdateCityWithName"
+	sqlSelectCityWithName = "SelectCityWithName"
+	sqlCountCity = "CountCity"
+)
+
+var queryManager *QueryMan
+
+func main() {
+	// prepare db source uri
+	sourceName := "user:pwd@tcp(127.0.0.1:3306)/mydb?timeout=10s"
+
+	// xml file dir
+	xmlFileDir := "/my/somewhere"
+
+	// create preference
+	querymanPref := NewQuerymanPreference(xmlFileDir, sourceName)
+	querymanPref.Fileset = "myquery*.xml"
+
+	// create queryman
+	man, err := NewQueryman(querymanPref)
+	if err != nil {
+		log.Printf("fail to open queryman : %s\n", err.Error())
+		return
+	}
+	queryManager = man
+
+	// do work
+	executeWithStmtId()
+	queryWithStmtId()
+	executeWithFunctionName()
+	queryWithFunctionName()
+	executeWithParameters()
+	insertWithSlice()
+	insertWithStruct()
+	insertWithMap()
+	insertNestedSlice()
+	transactionInsert()
+	queryToStruct()
+	queryWithMap()
+	queryRowStruct()
+	queryRow()
+}
+
+type City struct {
+	Id		int
+	Name	string
+	Age		int
+	IsMan	bool
+	Percentage float32
+	CreateTime time.Time
+	UpdateTime time.Time
+}
+
+// execute with sql statement id
+func executeWithStmtId() error {
+	_, err := queryManager.ExecuteWithStmt(sqlDropCityTable)
+	if err != nil {
+		return fmt.Errorf("fail to execute(%s) : %s\n", sqlDropCityTable, err.Error())
+	}
+
+	_, err = queryManager.ExecuteWithStmt(sqlCreateCityTable)
+	if err != nil {
+		return fmt.Errorf("fail to execute(%s) : %s\n", sqlCreateCityTable, err.Error())
+	}
+
+	return nil
+}
+
+// query with sql statement id
+func queryWithStmtId() {
+	city := &City{}
+	result := queryManager.QueryWithStmt(sqlSelectCityWithName, "some param")
+	if result.GetError() != nil {
+		log.Printf("%s", result.GetError())
+		return
+	}
+
+	defer result.Close()
+
+	if !result.Next() {
+		log.Printf("errNoMoreData")
+		return
+	}
+
+	// queryman Scan into struct
+	err := result.Scan(city)
+	if err != nil {
+		log.Printf("fail to scan : %s", err.Error())
+		return
+	}
+}
+
+// query statement id will be function name
+// queryman try to find 'executeWithFunctionName' in query xml
+// e.g) <insert id='executeWithFunctionName'> ... </insert>
+func executeWithFunctionName() error {
+	_, err := queryManager.Execute()
+	if err != nil {
+		return fmt.Errorf("fail to execute : %s\n", err.Error())
+	}
+
+	return nil
+}
+
+// query statement id will be function name
+// queryman try to find 'queryWithFunctionName' in query xml
+// e.g) <select id='queryWithFunctionName'> ... </insert>
+func queryWithFunctionName() {
+	result := queryManager.Query("first param")
+	if result.GetError() != nil {
+		log.Printf("%s", result.GetError())
+		return
+	}
+
+	defer result.Close()
+}
+
+// queryman try to find 'executeWithParameters' in query xml
+// e.g) <insert id='executeWithParameters'> ... </insert>
+func executeWithParameters() {
+	// queryManager.execute will use stmt id 'executeWithParameters'
+	result, err := queryManager.Execute("first param", 42, true, 40.0, time.Now(), nil)
+	if err != nil {
+		log.Printf(err.Error())
+		return
+	}
+
+	id, err := result.LastInsertId()
+	if err != nil {
+		log.Printf(err.Error())
+		return
+	}
+
+	if id != 1 {
+		log.Printf("invalid last insert id : %d", id)
+		return
+	}
+}
+
+// stmt id : insertSlice
+// using slice as parameter
+func insertWithSlice() {
+	args := make([]interface{}, 0)
+	args = append(args, "sample city")
+	args = append(args, 42)
+	args = append(args, true)
+	args = append(args, 40.0)
+	args = append(args, time.Now())
+	args = append(args, nil)
+	_, err := queryManager.Execute(args)
+	if err != nil {
+		log.Printf(err.Error())
+		return
+	}
+}
+
+// stmt id : insertWithStruct
+// using Struct as parameter
+func insertWithStruct() {
+	city := createCity()
+
+	_, err := queryManager.Execute(city)
+	if err != nil {
+		log.Printf(err.Error())
+		return
+	}
+}
+
+func createCity() City {
+	city := City{}
+	city.Name = "jin.freestyle@gmail.com"
+	city.Age = 142
+	city.IsMan = true
+	city.Percentage = 43.4
+	city.CreateTime = time.Now()
+	city.UpdateTime = time.Now()
+	return city
+}
+
+// stmt id : insertWithMap
+// using Map as parameter
+func insertWithMap() {
+	args := make(map[string]interface{})
+	args["Name"] = "map name"
+	args["Age"] = nil
+	args["IsMan"] = true
+	args["Percentage"] = 19.21
+	args["CreateTime"] = time.Now()
+	args["UpdateTime"] = time.Now()
+
+	_, err := queryManager.Execute(args)
+	if err != nil {
+		log.Printf(err.Error())
+		return
+	}
+}
+
+// stmt id : insertNestedSlice
+// using Nested Slice as parameter
+func insertNestedSlice() {
+	params := make([][]interface{}, 0)
+
+	insertingCount := 5
+	for i:=0; i<insertingCount; i++ {
+		args := make([]interface{}, 0)
+		args = append(args, "sample city")
+		args = append(args, 42)
+		args = append(args, true)
+		args = append(args, 40.0)
+		args = append(args, time.Now())
+		args = append(args, nil)
+		params = append(params, args)
+	}
+
+	// internally queryman calls 'pstmt.Execute()' 5 times
+	result, err := queryManager.Execute(params)
+	if err != nil {
+		log.Printf(err.Error())
+		return
+	}
+
+	affected, err := result.RowsAffected()
+	if err != nil {
+		log.Printf(err.Error())
+		return
+	}
+
+	if int(affected) != insertingCount {
+		log.Printf("invalid affected count : %d", insertingCount)
+		return
+	}
+
+	if pstmtResult, ok := result.(ExecMultiResult); ok  {
+		if len(pstmtResult.GetInsertIdList()) != insertingCount {
+			log.Printf("inserted id count is not valid. %d", len(pstmtResult.GetInsertIdList()))
+		}
+	} else {
+		log.Printf("result type is not ExecMultiResult")
+	}
+}
+
+// in transaction, everything is same
+func transactionInsert() {
+	city := createCity()
+	tx, err := queryManager.Begin()
+	defer tx.Rollback()
+	result, err := tx.ExecuteWithStmt(sqlInsertCity, city)
+	if err != nil {
+		log.Printf(err.Error())
+		return
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		log.Printf(err.Error())
+		return
+	}
+
+	affected, err := result.RowsAffected()
+	if err != nil {
+		log.Printf(err.Error())
+		return
+	}
+
+	id, err := result.LastInsertId()
+	if err != nil {
+		log.Printf(err.Error())
+		return
+	}
+
+	if id != 1 || affected != 1 {
+		log.Printf("invalid result : id=%d, affected=%d", id, affected)
+		return
+	}
+}
+
+// queryman scan row result to struct
+func queryToStruct() {
+	city := &City{}
+	result := queryManager.QueryWithStmt(sqlSelectCityWithName, "first param")
+	if result.GetError() != nil {
+		log.Printf("%s", result.GetError())
+		return
+	}
+
+	defer result.Close()
+
+	if !result.Next() {
+		log.Printf("errNoMoreData")
+		return
+	}
+
+	err := result.Scan(city)
+	if err != nil {
+		log.Printf("fail to scan : %s", err.Error())
+		return
+	}
+}
+
+
+func queryRow() {
+	// insert sample
+	_, err := queryManager.ExecuteWithStmt(sqlInsertCity, "sample_city", 42, true, 40.0, time.Now(), time.Now())
+	if err != nil {
+		log.Printf(err.Error())
+		return
+	}
+
+	count := 0
+	err = queryManager.QueryRow(sqlCountCity).Scan(&count)
+	if err != nil {
+		log.Printf(err.Error())
+		return
+	}
+
+	if count != 1 {
+		log.Printf("invalid city count %d", count)
+		return
+	}
+}
+
+func queryRowStruct() {
+	type NullableCity struct {
+		Id      sql.NullInt64
+		Name    sql.NullString
+		Age     sql.NullInt64
+		IsMan   sql.NullBool
+		Percentage sql.NullFloat64
+		CreateTime mysql.NullTime
+		UpdateTime mysql.NullTime
+	}
+
+	city := NullableCity{}
+
+	err := queryManager.QueryRowWithStmt(sqlSelectCityWithName, "unexported_field").Scan(&city)
+	if err != nil {
+		log.Printf(err.Error())
+		return
+	}
+
+	if city.Age.Int64 != 42 {
+		log.Printf("selecting mismatch")
+	}
+}
+
+func queryWithMap() {
+	m := make(map[string]string)
+	m["Name"] = "map_name"
+	result := queryManager.QueryWithStmt(sqlSelectCityWithName, m)
+	if result.GetError() != nil {
+		log.Printf(result.GetError().Error())
+		return
+	}
+
+	defer result.Close()
+	var id int
+	var name string
+	var age int
+	var isMan bool
+	var percentage float32
+	var createTime time.Time
+	var updateTime time.Time
+
+	if !result.Next() {
+		log.Printf("errNoMoreData")
+		return
+	}
+	err := result.Scan(&id, &name, &age, &isMan, &percentage, &createTime, &updateTime)
+	if err != nil {
+		log.Printf(err.Error())
+		return
+	}
+}
+
+```
 
 # Dynamic SQL #
 
 queryman support '<if>' tag for dynamic sql support.
-'if' tag has 'exist' attribute present bool. if 'exist' arrtibute omitted, default value is true.
-if you want to use dynamic sql, you have to pass parameters as map.
+'if' tag has 'exist' attribute present bool. **`if 'exist' arrtibute omitted, default value is true`**
+if you want to use dynamic sql, **`you have to pass parameters as map`**
 
 
 ```

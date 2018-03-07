@@ -167,10 +167,10 @@ func (r *QueryRowResult) Scan(v ...interface{}) (err error) {
 	}()
 
 	defer func() {
-		r.pstmt.Close()
-		r.pstmt = nil
 		r.rows.Close()
 		r.rows = nil
+		r.pstmt.Close()
+		r.pstmt = nil
 	} ()
 
 	if !r.rows.Next() {

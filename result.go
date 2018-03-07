@@ -117,8 +117,10 @@ func (r *QueryResult) scanToStruct(val *reflect.Value) error {
 
 func (r *QueryResult) Close() error {
 	defer func() {
+		r.rows = nil
 		if r.pstmt != nil {
 			r.pstmt.Close()
+			r.pstmt = nil
 		}
 	}()
 
@@ -164,8 +166,12 @@ func (r *QueryRowResult) Scan(v ...interface{}) (err error) {
 		}
 	}()
 
-	defer r.pstmt.Close()
-	defer r.rows.Close()
+	defer func() {
+		r.pstmt.Close()
+		r.pstmt = nil
+		r.rows.Close()
+		r.rows = nil
+	} ()
 
 	if !r.rows.Next() {
 		if err := r.rows.Err(); err != nil {

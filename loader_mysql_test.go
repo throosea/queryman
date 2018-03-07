@@ -193,8 +193,8 @@ func TestLoaderComplicated(t *testing.T) {
 		}
 	}
 
-	if len(stmtList) != 30 {
-		t.Errorf("expect stmt len 2")
+	if len(stmtList) != 43 {
+		t.Errorf("expect stmt len 43. %d", len(stmtList))
 	}
 
 	//fmt.Printf("total %d stmt list\n", len(stmtList))

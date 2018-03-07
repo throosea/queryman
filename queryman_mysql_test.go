@@ -182,8 +182,9 @@ func clearPreviousXmlFiles(path string, fileset string) {
 	}
 }
 
-func loggingSlowQuery(text string)	{
-	fmt.Printf("slowQuery : %s\n", text)
+// func(stmtId string, start time.Time, elapsed time.Duration)
+func loggingSlowQuery(stmtId string, start time.Time, elapsed time.Duration)	{
+	fmt.Printf("slowQuery : stmtId=%s\n", stmtId)
 }
 
 func TestConnection(t *testing.T) {
@@ -967,6 +968,31 @@ func TestSelectCityWithIf(t *testing.T) {
 	if !(city.Age.Valid && city.Age.Int64 == 42) {
 		t.Fatalf("invalid age")
 	}
+}
+
+func TestSelectNoRows(t *testing.T) {
+	setup()
+
+	type NullableCity struct {
+		Id		sql.NullInt64
+		Name	sql.NullString
+		Age		sql.NullInt64
+		IsMan	sql.NullBool
+		Percentage sql.NullFloat64
+		CreateTime mysql.NullTime
+		UpdateTime mysql.NullTime
+	}
+
+	city := NullableCity{}
+	m := make(map[string]interface{})
+	m["IsMan"] = true
+	m["Name"] = "map_name_not_found"
+	err := queryManager.QueryRowWithStmt(sqlSelectCityWithIf, m).Scan(&city)
+	if err == nil {
+		t.Fatalf("should be no rows")
+	}
+
+	fmt.Printf("%v\n", err)
 }
 
 

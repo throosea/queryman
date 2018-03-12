@@ -146,6 +146,9 @@ func (t *DBTransaction) QueryRowWithStmt(id string, v ...interface{}) *QueryRowR
 	} else {
 		queryRowResult = newQueryRowResult(queryResult.pstmt, queryResult.rows)
 	}
+
+	queryResult.pstmt = nil
+	queryResult.rows = nil
 	queryRowResult.fieldNameConverter = t.fieldNameConverter
 	return queryRowResult
 }

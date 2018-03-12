@@ -152,14 +152,6 @@ func newQueryRowResult(stmt *sql.Stmt, rows *sql.Rows) *QueryRowResult {
 }
 
 func (r *QueryRowResult) Scan(v ...interface{}) (err error) {
-	if r.err != nil {
-		return r.err
-	}
-
-	if r.rows.Err() != nil {
-		return r.rows.Err()
-	}
-
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("fail to scan : %s", r)
@@ -167,11 +159,23 @@ func (r *QueryRowResult) Scan(v ...interface{}) (err error) {
 	}()
 
 	defer func() {
-		r.rows.Close()
-		r.rows = nil
-		r.pstmt.Close()
-		r.pstmt = nil
+		if r.rows != nil {
+			r.rows.Close()
+			r.rows = nil
+		}
+		if r.pstmt != nil {
+			r.pstmt.Close()
+			r.pstmt = nil
+		}
 	} ()
+
+	if r.err != nil {
+		return r.err
+	}
+
+	if r.rows.Err() != nil {
+		return r.rows.Err()
+	}
 
 	if !r.rows.Next() {
 		if err := r.rows.Err(); err != nil {

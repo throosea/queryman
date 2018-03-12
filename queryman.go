@@ -189,11 +189,14 @@ func (man *QueryMan) QueryRowWithStmt(stmtIdOrUserQuery string, v ...interface{}
 	var queryRowResult *QueryRowResult
 	queryResult := queryMultiRow(man, stmt, v...)
 	if queryResult.err != nil {
+		queryResult.Close()
 		queryRowResult = newQueryRowResultError(queryResult.err)
 	} else {
 		queryRowResult = newQueryRowResult(queryResult.pstmt, queryResult.rows)
 	}
 
+	queryResult.pstmt = nil
+	queryResult.rows = nil
 	queryRowResult.fieldNameConverter = man.fieldNameConverter
 	return queryRowResult
 }

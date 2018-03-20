@@ -132,6 +132,7 @@ func (r *QueryResult) Close() error {
 }
 
 type QueryRowResult struct {
+	transaction 		bool
 	pstmt              *sql.Stmt
 	err                error
 	rows               *sql.Rows
@@ -148,7 +149,12 @@ func newQueryRowResult(stmt *sql.Stmt, rows *sql.Rows) *QueryRowResult {
 	queryResult := &QueryRowResult{}
 	queryResult.pstmt = stmt
 	queryResult.rows = rows
+	queryResult.transaction = false
 	return queryResult
+}
+
+func (r *QueryRowResult) SetTransaction()  {
+	r.transaction = true
 }
 
 func (r *QueryRowResult) Scan(v ...interface{}) (err error) {
@@ -163,7 +169,7 @@ func (r *QueryRowResult) Scan(v ...interface{}) (err error) {
 			r.rows.Close()
 			r.rows = nil
 		}
-		if r.pstmt != nil {
+		if !r.transaction && r.pstmt != nil {
 			r.pstmt.Close()
 			r.pstmt = nil
 		}

@@ -89,6 +89,7 @@ type SqlProxy interface {
 	query(query string, args ...interface{}) (*sql.Rows, error)
 	queryRow(query string, args ...interface{}) *sql.Row
 	prepare(query string) (*sql.Stmt, error)
+	isTransaction() bool
 	SqlDebugger
 }
 

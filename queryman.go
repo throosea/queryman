@@ -103,6 +103,10 @@ func (man *QueryMan) prepare(query string) (*sql.Stmt, error) {
 	return man.db.Prepare(query)
 }
 
+func (man *QueryMan) isTransaction() bool {
+	return false
+}
+
 func (man *QueryMan) debugEnabled() bool	{
 	return man.preference.Debug
 }

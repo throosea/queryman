@@ -70,6 +70,10 @@ func (t *DBTransaction) prepare(query string) (*sql.Stmt, error) {
 	return t.tx.Prepare(query)
 }
 
+func (t *DBTransaction) isTransaction() bool {
+	return true
+}
+
 func (t *DBTransaction) debugEnabled() bool	{
 	return t.debugger.debugEnabled()
 }
@@ -150,5 +154,6 @@ func (t *DBTransaction) QueryRowWithStmt(id string, v ...interface{}) *QueryRowR
 	queryResult.pstmt = nil
 	queryResult.rows = nil
 	queryRowResult.fieldNameConverter = t.fieldNameConverter
+	queryRowResult.SetTransaction()
 	return queryRowResult
 }

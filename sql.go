@@ -449,6 +449,9 @@ func queryMultiRow(sqlProxy SqlProxy, stmt QueryStatement, v ...interface{}) (qu
 		} ()
 		rows, err := pstmt.Query()
 		if err != nil {
+			if !sqlProxy.isTransaction() {
+				pstmt.Close()
+			}
 			return newQueryResultError(err)
 		}
 		return newQueryResult(pstmt, rows)
@@ -564,7 +567,9 @@ func queryWithList(sqlProxy SqlProxy, stmt QueryStatement, args []interface{}) *
 	} ()
 	rows, err := pstmt.Query(args...)
 	if err != nil {
-		pstmt.Close()
+		if !sqlProxy.isTransaction() {
+			pstmt.Close()
+		}
 		return newQueryResultError(err)
 	}
 	return newQueryResult(pstmt, rows)

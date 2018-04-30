@@ -49,6 +49,10 @@ func (man *QueryMan) GetSqlCount() int {
 	return len(man.statementMap)
 }
 
+func (man *QueryMan) GetMaxConnCount() int {
+	return man.preference.MaxOpenConns
+}
+
 func (man *QueryMan) registStatement(queryStatement QueryStatement) error {
 	if queryNormalizer == nil {
 		queryNormalizer = newNormalizer(man.preference.DriverName)

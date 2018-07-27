@@ -44,6 +44,8 @@ const (
 const (
 	sqlDropCityTable = "DropCityTable"
 	sqlCreateCityTable = "CreateCityTable"
+	sqlDropAlbumTable = "DropAlbumTable"
+	sqlCreateAlbumTable = "CreateAlbumTable"
 	sqlInsertCity = "InsertCity"
 	sqlUpdateCityWithName = "UpdateCityWithName"
 	sqlSelectCityWithName = "SelectCityWithName"
@@ -124,6 +126,16 @@ create table city (
     update_time datetime,
     primary key (id)
 )
+    </update>
+	<update id="DropAlbumTable">
+        drop table if exists album
+    </update>
+    <update id="CreateAlbumTable">
+	create table album (
+    	id  int,
+    	score int,
+    	primary key (id)
+	)
     </update>
     <insert id="InsertCity">
         INSERT INTO CITY(NAME,AGE,IS_MAN,PERCENTAGE,CREATE_TIME,UPDATE_TIME) VALUES({Name},{Age},{IsMan},{Percentage},{CreateTime},{UpdateTime})
@@ -232,6 +244,16 @@ func dropAndCreateTable() error {
 		return fmt.Errorf("fail to execute(%s) : %s\n", sqlCreateCityTable, err.Error())
 	}
 
+	err = dropAlbumTable()
+	if err != nil {
+		return fmt.Errorf("fail to execute(%s) : %s\n", sqlDropCityTable, err.Error())
+	}
+
+	err = createAlbumTable()
+	if err != nil {
+		return fmt.Errorf("fail to execute(%s) : %s\n", sqlCreateCityTable, err.Error())
+	}
+
 	return nil
 }
 
@@ -241,6 +263,16 @@ func dropCityTable() error {
 }
 
 func createCityTable() error {
+	_, err := queryManager.Execute()
+	return err
+}
+
+func dropAlbumTable() error {
+	_, err := queryManager.Execute()
+	return err
+}
+
+func createAlbumTable() error {
 	_, err := queryManager.Execute()
 	return err
 }
@@ -1006,3 +1038,4 @@ func createCity() City {
 	city.UpdateTime = time.Now()
 	return city
 }
+

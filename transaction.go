@@ -86,6 +86,26 @@ func (t *DBTransaction) recordExcution(stmtId string, start time.Time)	{
 	t.debugger.recordExcution(stmtId, start)
 }
 
+func (t *DBTransaction) CreateBulk() (Bulk, error) {
+	pc, _, _, _ := runtime.Caller(1)
+	funcName := findFunctionName(pc)
+	return t.CreateBulkWithStmt(funcName)
+}
+
+func (t *DBTransaction) CreateBulkWithStmt(stmtIdOrUserQuery string) (Bulk, error) {
+	stmt, err := t.queryFinder.find(stmtIdOrUserQuery)
+	if err != nil {
+		return nil, err
+	}
+
+	if stmt.eleType != eleTypeInsert && stmt.eleType != eleTypeUpdate {
+		return nil, ErrExecutionInvalidSqlType
+	}
+
+	bulk := newQuerymanBulk(t, stmt)
+	return bulk, nil
+}
+
 func (t *DBTransaction) Execute(v ...interface{}) (sql.Result, error) {
 	pc, _, _, _ := runtime.Caller(1)
 	funcName := findFunctionName(pc)

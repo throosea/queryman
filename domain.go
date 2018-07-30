@@ -30,7 +30,7 @@ import (
 	"fmt"
 	"bytes"
 	"time"
-)
+	)
 
 const (
 	eleTypeUnknown = iota
@@ -73,6 +73,7 @@ func buildElementType(stmt string) declareElementType	{
 var (
 	ErrInterfaceIsNotSupported    = errors.New("not supported type : interface")
 	ErrPtrIsNotSupported          = errors.New("not supported type : ptr")
+	ErrNeedStructSliceParam       = errors.New("parameter not supported type : struct slice/array only")
 	ErrInvalidMapKeyType          = errors.New("map key should be string")
 	ErrInvalidMapType             = errors.New("map only accepted [string]interface{} type")
 	ErrExecutionInvalidSqlType    = errors.New("invalid execution for sql. only insert or update permitted")
@@ -83,6 +84,7 @@ var (
 	ErrNoRows                     = errors.New("sql: no rows in result set")
 	ErrNoInsertId                 = errors.New("sql: no insert id")
 )
+
 
 type SqlProxy interface {
 	exec(query string, args ...interface{}) (sql.Result, error)

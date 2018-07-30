@@ -30,7 +30,7 @@ import (
 	"database/sql/driver"
 	"bytes"
 	"time"
-)
+	)
 
 func execute(sqlProxy SqlProxy, stmt QueryStatement, v ...interface{}) (result sql.Result, err error) {
 	execStmt, err := refineConditional(stmt, v...)
@@ -123,7 +123,6 @@ func execWithMap(sqlProxy SqlProxy, stmt QueryStatement, m map[string]interface{
 
 	return sqlProxy.exec(stmt.Query, param...)
 }
-
 
 func execWithList(sqlProxy SqlProxy, stmt QueryStatement, args []interface{}) (sql.Result, error) {
 	atype := reflect.TypeOf(args[0])

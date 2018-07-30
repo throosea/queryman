@@ -30,11 +30,12 @@ import (
 	"flag"
 	"io/ioutil"
 	"path/filepath"
-	mysql "github.com/go-sql-driver/mysql"
+	"github.com/go-sql-driver/mysql"
 	"time"
 	"bytes"
 	"errors"
 	"database/sql"
+	"log"
 )
 
 const (
@@ -130,6 +131,9 @@ create table city (
 	<update id="DropAlbumTable">
         drop table if exists album
     </update>
+	<select id="SelectAlbumCount">
+		SELECT COUNT(*) FROM album
+	</select>
     <update id="CreateAlbumTable">
 	create table album (
     	id  int,
@@ -137,6 +141,24 @@ create table city (
     	primary key (id)
 	)
     </update>
+	<insert id="InsertAlbum">
+		INSERT INTO album  ( id, score ) VALUES ({Id},{Score})
+	</insert>
+	<insert id="UpsertAlbum">
+		INSERT INTO album  ( id, score
+        )
+        VALUES
+        (
+            {Id},
+            {Score}
+        )
+        ON DUPLICATE KEY
+        UPDATE
+            score = score + VALUES(score)
+	</insert>
+	<update id="UpdateAlbum">
+		UPDATE album SET score={Score} WHERE id={Id}
+	</update>
     <insert id="InsertCity">
         INSERT INTO CITY(NAME,AGE,IS_MAN,PERCENTAGE,CREATE_TIME,UPDATE_TIME) VALUES({Name},{Age},{IsMan},{Percentage},{CreateTime},{UpdateTime})
     </insert>
@@ -1039,3 +1061,191 @@ func createCity() City {
 	return city
 }
 
+func TestUpsertAlbum(t *testing.T)	{
+	setup()
+
+	list := make([]AlbumData, 0)
+
+	list = append(list, AlbumData{Id:100, Score:10})
+	list = append(list, AlbumData{Id:200, Score:31})
+	list = append(list, AlbumData{Id:300, Score:9})
+	list = append(list, AlbumData{Id:400, Score:8})
+	list = append(list, AlbumData{Id:500, Score:7})
+	list = append(list, AlbumData{Id:100, Score:12})
+
+	affected, err := upsertAlbum(list)
+	if err != nil {
+		t.Fatalf("fail to UpsertAlbum : %s", err.Error())
+	}
+	if affected != 7 {
+		t.Fatalf("with %d, but %d", 7, affected)
+	}
+}
+
+func upsertAlbum(list []AlbumData) (int, error)	{
+	b, err := queryManager.CreateBulk()
+	if err != nil {
+		return 0, err
+	}
+
+	err = b.AddBatch(list)
+	if err != nil {
+		return 0, err
+	}
+
+	result, err := b.Execute()
+	if err != nil {
+		return 0, err
+	}
+
+	affected, err := result.RowsAffected()
+	return int(affected), err
+}
+
+type AlbumData struct {
+	Id 	int
+	Score int
+}
+
+
+func TestBatchInsert(t *testing.T)	{
+	setup()
+
+	list := make([]AlbumData, 0)
+
+	list = append(list, AlbumData{Id:100, Score:110})
+	list = append(list, AlbumData{Id:200, Score:131})
+	list = append(list, AlbumData{Id:300, Score:19})
+	list = append(list, AlbumData{Id:400, Score:18})
+	list = append(list, AlbumData{Id:500, Score:17})
+
+	affected, err := insertAlbum(list)
+	if err != nil {
+		t.Fatalf("fail to insertAlbum : %s", err.Error())
+	}
+	if affected != 5 {
+		t.Fatalf("with %d, but %d", 5, affected)
+	}
+
+	count := selectAlbumCount()
+	if count != 5 {
+		t.Fatalf("with %d, but %d", 5, count)
+	}
+
+	plist := make([]*AlbumData, 0)
+
+	plist = append(plist, &AlbumData{Id:1100, Score:110})
+	plist = append(plist, &AlbumData{Id:1200, Score:131})
+
+	bulk, err := queryManager.CreateBulkWithStmt("insertAlbum")
+	if err != nil {
+		t.Fatalf("fail to insertAlbum : %s", err.Error())
+	}
+	bulk.AddBatch(&AlbumData{Id:1100, Score:110})
+	bulk.AddBatch(&AlbumData{Id:1200, Score:131})
+	result, err := bulk.Execute()
+	if err != nil {
+		t.Fatalf("fail to insertAlbum : %s", err.Error())
+	}
+	a, err := result.RowsAffected()
+	affected = int(a)
+	if affected != 2 {
+		t.Fatalf("with %d, but %d", 2, affected)
+	}
+
+	count = selectAlbumCount()
+	if count != 7 {
+		t.Fatalf("with %d, but %d", 7, count)
+	}
+}
+
+func TestBatchInsertWithMap(t *testing.T)	{
+	setup()
+
+	bulk, err := queryManager.CreateBulkWithStmt("insertAlbum")
+	if err != nil {
+		t.Fatalf("fail to insertAlbum : %s", err.Error())
+	}
+	for i:= 0; i<=10; i++	{
+		m := make(map[string]interface{})
+		m["Id"] = i+100
+		m["Score"] = i+100+5
+		bulk.AddBatch(m)
+	}
+
+	result, err := bulk.Execute()
+	if err != nil {
+		t.Fatalf("fail to TestBatchInsertWithMap : %s", err.Error())
+	}
+	r, err := result.RowsAffected()
+	affected := int(r)
+	if affected != 11 {
+		t.Fatalf("with %d, but %d", 11, affected)
+	}
+
+	count := selectAlbumCount()
+	if count != 11 {
+		t.Fatalf("with %d, but %d", 11, count)
+	}
+}
+
+func updateAlbum(list []AlbumData) error	{
+	b, err := queryManager.CreateBulk()
+	if err != nil {
+		return err
+	}
+
+	err = b.AddBatch(list)
+	if err != nil {
+		return err
+	}
+
+	_, err = b.Execute()
+	return err
+}
+
+func insertAlbum(list []AlbumData) (int, error)	{
+	b, err := queryManager.CreateBulk()
+	if err != nil {
+		return 0, err
+	}
+
+	err = b.AddBatch(list)
+	if err != nil {
+		return 0, err
+	}
+
+	result, err := b.Execute()
+	if err != nil {
+		return 0, err
+	}
+
+	affected, err := result.RowsAffected()
+	return int(affected), err
+}
+
+
+func updateAlbumPtr(list []*AlbumData) error	{
+	b, err := queryManager.CreateBulkWithStmt("updateAlbum")
+	if err != nil {
+		return err
+	}
+
+	err = b.AddBatch(list)
+	if err != nil {
+		return err
+	}
+
+	_, err = b.Execute()
+	return err
+}
+
+func selectAlbumCount()	int		{
+	count := 0
+	err := queryManager.QueryRow().Scan(&count)
+	if err != nil {
+		log.Printf("selectAlbumCount error : %s", err.Error())
+		return 0
+	}
+	return count
+}

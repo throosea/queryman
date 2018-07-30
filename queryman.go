@@ -137,6 +137,26 @@ func (man *QueryMan) find(id string)	(QueryStatement, error) {
 	return stmt, nil
 }
 
+func (man *QueryMan) CreateBulk() (Bulk, error) {
+	pc, _, _, _ := runtime.Caller(1)
+	funcName := findFunctionName(pc)
+	return man.CreateBulkWithStmt(funcName)
+}
+
+func (man *QueryMan) CreateBulkWithStmt(stmtIdOrUserQuery string) (Bulk, error) {
+	stmt, err := man.find(stmtIdOrUserQuery)
+	if err != nil {
+		return nil, err
+	}
+
+	if stmt.eleType != eleTypeInsert && stmt.eleType != eleTypeUpdate {
+		return nil, ErrExecutionInvalidSqlType
+	}
+
+	bulk := newQuerymanBulk(man, stmt)
+	return bulk, nil
+}
+
 func (man *QueryMan) Execute(v ...interface{}) (sql.Result, error) {
 	pc, _, _, _ := runtime.Caller(1)
 	funcName := findFunctionName(pc)

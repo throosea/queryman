@@ -19,22 +19,17 @@ import (
 	"reflect"
 	"fmt"
 	"database/sql/driver"
-			)
+	"database/sql"
+	"strings"
+	)
 
-type BulkInsert interface {
-	AddInsert(params ...interface{})
-	Execute()
+type Bulk interface {
+	AddBatch(params ...interface{}) error
+	Execute() (sql.Result, error)
 }
 
-type querymanBulkInsert struct {
-	stmt 		QueryStatement
-	sqlProxy 	SqlProxy
-	params		[]interface{}
-	execCount 	int
-}
-
-func newQuerymanBulkInsert(sqlProxy SqlProxy, stmt QueryStatement)	*querymanBulkInsert {
-	b := &querymanBulkInsert{}
+func newQuerymanBulk(sqlProxy SqlProxy, stmt QueryStatement)	*querymanBulk {
+	b := &querymanBulk{}
 	b.sqlProxy = sqlProxy
 	b.stmt = stmt
 	b.params = make([]interface{}, 0)
@@ -42,7 +37,17 @@ func newQuerymanBulkInsert(sqlProxy SqlProxy, stmt QueryStatement)	*querymanBulk
 	return b
 }
 
-func (b *querymanBulkInsert) AddInsert(params ...interface{}) (err error)	{
+type querymanBulk struct {
+	stmt 		QueryStatement
+	sqlProxy 	SqlProxy
+	params		[]interface{}
+	execCount 	int
+}
+func (b *querymanBulk) String() string	{
+	return fmt.Sprintf("stmt=[%s], execCount=[%d], params.len=[%d]", b.stmt.Query, b.execCount, len(b.params))
+}
+
+func (b *querymanBulk) AddBatch(params ...interface{}) (err error)	{
 	if len(params) == 0 {
 		return nil
 	}
@@ -84,32 +89,43 @@ func (b *querymanBulkInsert) AddInsert(params ...interface{}) (err error)	{
 	return b.addWithList(params)
 }
 
-func (b *querymanBulkInsert) Execute()	{
+func (b *querymanBulk) Execute() (sql.Result, error)	{
+	if b.stmt.eleType == eleTypeInsert	{
+		return b.executeInsert()
+	} else if b.stmt.eleType == eleTypeUpdate	{
+		return b.executeUpdate()
+	}
 
+	return nil, fmt.Errorf("only support insert/update")
 }
 
+func (b *querymanBulk) executeInsert() (sql.Result, error)	{
+	bulkInsertQuery := findValuesClauseInInsert(b.stmt.Query)
+	sql := bulkInsertQuery.buildMultiValueQuery(b.execCount)
+	return b.sqlProxy.exec(sql, b.params...)
+}
 
-func (b *querymanBulkInsert) addParams(param ...interface{})	{
+func (b *querymanBulk) executeUpdate()	(sql.Result, error) {
+
+	return nil, fmt.Errorf("not support yet (bulk update)")
+}
+
+func (b *querymanBulk) addParams(param ...interface{})	{
 	for _, p := range param {
 		b.params = append(b.params, p)
 	}
 	b.execCount = b.execCount + 1
 }
 
-func (b *querymanBulkInsert) addList(val interface{}) error {
-	var passing []interface{}
+func (b *querymanBulk) addList(val interface{}) error {
 	if slice, ok := val.([]interface{}); ok  {
-		passing = slice
-	} else {
-		passing = flattenToList(val)
+		return b.addWithList(slice)
 	}
-
-	b.addParams(passing)
-
-	return nil
+	passing := flattenToList(val)
+	return b.addWithList(passing)
 }
 
-func (b *querymanBulkInsert) addMap(val interface{}) error {
+func (b *querymanBulk) addMap(val interface{}) error {
 	if m, ok := val.(map[string]interface{}); ok  {
 		return b.addWithMap(m)
 	}
@@ -117,12 +133,12 @@ func (b *querymanBulkInsert) addMap(val interface{}) error {
 	return b.addWithMap(passing)
 }
 
-func (b *querymanBulkInsert) addWithObject(parameter interface{}) error {
+func (b *querymanBulk) addWithObject(parameter interface{}) error {
 	m := flattenStructToMap(parameter)
 	return b.addWithMap(m)
 }
 
-func (b *querymanBulkInsert) addWithMap(m map[string]interface{}) error {
+func (b *querymanBulk) addWithMap(m map[string]interface{}) error {
 	passing := make([]interface{}, 0)
 	for _,v := range b.stmt.columnMention {
 		found, ok := m[v]
@@ -132,12 +148,12 @@ func (b *querymanBulkInsert) addWithMap(m map[string]interface{}) error {
 		passing = append(passing, found)
 	}
 
-	b.addParams(passing)
+	b.addParams(passing...)
 
 	return nil
 }
 
-func (b *querymanBulkInsert) addWithList(args []interface{}) error {
+func (b *querymanBulk) addWithList(args []interface{}) error {
 	atype := reflect.TypeOf(args[0])
 	val := args[0]
 
@@ -170,31 +186,7 @@ func (b *querymanBulkInsert) addWithList(args []interface{}) error {
 	return nil
 }
 
-func isStruct(arg interface{}) bool {
-	atype := reflect.TypeOf(arg)
-	val := arg
-
-	// reform ptr
-	if atype.Kind() == reflect.Ptr {
-		atype = atype.Elem()
-
-		if reflect.ValueOf(arg).IsNil() {
-			return false
-		}
-		val = reflect.ValueOf(val).Elem().Interface()
-	}
-
-	switch atype.Kind() {
-	case reflect.Struct :
-		if _, is := val.(driver.Valuer); !is {
-			return true
-		}
-	}
-
-	return false
-}
-
-func (b *querymanBulkInsert) addWithNestedList(args []interface{}) error {
+func (b *querymanBulk) addWithNestedList(args []interface{}) error {
 	// all data in the list should be 'slice' or 'array'
 	for i, v := range args {
 		if reflect.TypeOf(v).Kind() != reflect.Slice && reflect.TypeOf(v).Kind() != reflect.Array {
@@ -207,13 +199,13 @@ func (b *querymanBulkInsert) addWithNestedList(args []interface{}) error {
 
 	for _, v := range args {
 		passing := flattenToList(v)
-		b.addParams(passing)
+		b.addParams(passing...)
 	}
 
 	return nil
 }
 
-func (b *querymanBulkInsert) addWithStructList(args []interface{}) error {
+func (b *querymanBulk) addWithStructList(args []interface{}) error {
 	for _, v := range args {
 		atype := reflect.TypeOf(v)
 		val := v
@@ -237,13 +229,13 @@ func (b *querymanBulkInsert) addWithStructList(args []interface{}) error {
 			}
 			passing = append(passing, found)
 		}
-		b.addParams(passing)
+		b.addParams(passing...)
 	}
 
 	return nil
 }
 
-func (b *querymanBulkInsert) addWithNestedMap(args []interface{}) error {
+func (b *querymanBulk) addWithNestedMap(args []interface{}) error {
 	// all data in the list should be 'map'
 	for i, v := range args {
 		if reflect.TypeOf(v).Kind() != reflect.Map {
@@ -269,8 +261,47 @@ func (b *querymanBulkInsert) addWithNestedMap(args []interface{}) error {
 			passing = append(passing, found)
 		}
 
-		b.addParams(passing)
+		b.addParams(passing...)
 	}
 
 	return nil
+}
+
+
+func findValuesClauseInInsert(sql string) BulkInsertQuery	{
+	str := strings.ToLower(sql)
+	v := strings.Index(str, "values")
+	left := strings.Index(str[v+6:], "(")
+	start := v + left + 6
+	right := strings.Index(str[start:], ")")
+	right = right + 1
+
+	bulk := BulkInsertQuery{}
+	bulk.prefix = sql[:start]
+	bulk.values = sql[start:start+right]
+	bulk.suffix = sql[start+right:]
+	return bulk
+}
+
+
+type BulkInsertQuery struct {
+	prefix 	string
+	values 	string
+	suffix 	string
+}
+
+func (b BulkInsertQuery) String() string	{
+	return fmt.Sprintf("prefix=[%s]\nvalues=[%s]\nsuffix=[%s]", b.prefix, b.values, b.suffix)
+}
+
+func (b BulkInsertQuery) buildMultiValueQuery(size int) string	{
+	sql := b.prefix + " " + b.values
+	if size < 2 {
+		return sql + " " + b.suffix
+	}
+
+	for i:=1; i<size; i++	{
+		sql = sql + "," + b.values
+	}
+	return sql + " " + b.suffix
 }

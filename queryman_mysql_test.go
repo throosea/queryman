@@ -24,18 +24,18 @@
 package queryman
 
 import (
-	"testing"
-	"os"
-	"fmt"
-	"flag"
-	"io/ioutil"
-	"path/filepath"
-	"github.com/go-sql-driver/mysql"
-	"time"
 	"bytes"
-	"errors"
 	"database/sql"
+	"errors"
+	"flag"
+	"fmt"
+	"github.com/go-sql-driver/mysql"
+	"io/ioutil"
 	"log"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
 )
 
 const (
@@ -50,6 +50,7 @@ const (
 	sqlInsertCity = "InsertCity"
 	sqlUpdateCityWithName = "UpdateCityWithName"
 	sqlSelectCityWithName = "SelectCityWithName"
+	sqlSelectCityWithInClause = "SelectCityWithInClause"
 	sqlCountCity = "CountCity"
 	sqlSelectCityWithIf = "SelectCityWithIf"
 )
@@ -167,6 +168,9 @@ create table city (
     </update>
     <select id="SelectCityWithName">
         SELECT * FROM CITY WHERE NAME like {Name}
+    </select>
+	<select id="SelectCityWithInClause">
+        SELECT * FROM CITY WHERE Age > {Age} AND NAME IN ({Names})
     </select>
     <select id="CountCity">
         SELECT Count(*) FROM CITY
@@ -719,6 +723,56 @@ func TestQueryButNoMoreData(t *testing.T) {
 	}
 
 	t.Error("should be no more data")
+}
+
+func TestQueryWithInClause(t *testing.T) {
+	setup()
+
+	queryManager.ExecuteWithStmt(sqlInsertCity, "seoul", 42, true, 40.0, time.Now(), nil)
+	queryManager.ExecuteWithStmt(sqlInsertCity, "pusan", 43, true, 40.0, time.Now(), nil)
+	queryManager.ExecuteWithStmt(sqlInsertCity, "sejong", 44, true, 40.0, time.Now(), nil)
+
+	age := 10
+	strList := "\"pusan\",\"seoul\""
+	//strList := make([]string, 0)
+	//strList = append(strList, "seoul")
+	//strList = append(strList, "pusan")
+	// SELECT * FROM CITY WHERE Age > {Age} AND NAME IN ({Names})
+	sqlStr := "SELECT * FROM CITY WHERE Age > {Age} AND NAME IN (" + strList + ")"
+	result := queryManager.QueryWithStmt(sqlStr, age) // time is null
+	//result := queryManager.QueryWithStmt(sqlSelectCityWithInClause, age, strList) // time is null
+	if result.GetError() != nil {
+		t.Error(result.GetError())
+		return
+	}
+
+	defer result.Close()
+
+	type NullableCity struct {
+		Id		sql.NullInt64
+		Name	sql.NullString
+		Age		sql.NullInt64
+		IsMan	sql.NullBool
+		Percentage sql.NullFloat64
+		CreateTime mysql.NullTime
+		UpdateTime mysql.NullTime
+	}
+
+	list := make([]NullableCity, 0)
+	city := NullableCity{}
+	for result.Next() {
+		err := result.Scan(&city)
+		if err != nil {
+			t.Error(err.Error())
+			return
+		}
+		list = append(list, city)
+	}
+
+	log.Printf("list : %d\n", len(list))
+	for i, v := range list {
+		log.Printf("[%d] %v\n", i, v)
+	}
 }
 
 func TestQueryOneObject(t *testing.T) {

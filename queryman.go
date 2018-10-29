@@ -25,9 +25,9 @@ package queryman
 
 import (
 	"database/sql"
-	"strings"
 	"fmt"
 	"runtime"
+	"strings"
 	"time"
 )
 
@@ -131,10 +131,51 @@ func (man *QueryMan) recordExcution(stmtId string, start time.Time)	{
 func (man *QueryMan) find(id string)	(QueryStatement, error) {
 	stmt, ok := man.statementMap[strings.ToUpper(id)]
 	if !ok {
+		if isUserQuery(id) {
+			return buildUserQueryStatement(man, id)
+		}
 		return stmt, fmt.Errorf("not found query statement for id : %s", id)
 	}
 
 	return stmt, nil
+}
+
+func isUserQuery(query string) bool {
+	if strings.Index(query, " ") > 0 {
+		return true
+	}
+	if strings.Index(query, "\t") > 0 {
+		return true
+	}
+	if strings.Index(query, "\n") > 0 {
+		return true
+	}
+	if strings.Index(query, "\r") > 0 {
+		return true
+	}
+	return false
+}
+
+func buildUserQueryStatement(manager *QueryMan, query string)	(QueryStatement, error) {
+	stmt := QueryStatement{}
+	stmt.eleType = getDeclareSqlType(query)
+	stmt.Id = query
+	stmt.Query = query
+
+	err := manager.registStatement(stmt)
+	saved, _ := manager.statementMap[strings.ToUpper(query)]
+	return saved, err
+}
+
+func getDeclareSqlType(query string) declareElementType {
+	prefix := strings.Trim(query, " \r\n\t")[:10]
+	prefix = strings.ToUpper(prefix)
+	if strings.HasPrefix(prefix, "SELECT") {
+		return eleTypeSelect
+	} else if strings.HasPrefix(prefix, "INSERT") {
+		return eleTypeInsert
+	}
+	return eleTypeUpdate
 }
 
 func (man *QueryMan) CreateBulk() (Bulk, error) {

@@ -3,8 +3,4 @@
 .idea
 .Spotlight-V100
 .Trashes
-Icon?
-ehthumbs.db
-Thumbs.db
-vendor/**
-!vendor/vendor.json
+go.sum

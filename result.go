@@ -50,6 +50,14 @@ func newQueryResult(stmt *sql.Stmt, rows *sql.Rows) *QueryResult {
 	return queryResult
 }
 
+
+//func newQueryResult(stmt *sql.Stmt, rows *sql.Rows) *QueryResult {
+//	queryResult := &QueryResult{}
+//	queryResult.pstmt = stmt
+//	queryResult.rows = rows
+//	return queryResult
+//}
+
 func (r *QueryResult) Next() bool {
 	return r.rows.Next()
 }

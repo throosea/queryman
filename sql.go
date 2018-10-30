@@ -433,27 +433,14 @@ func queryMultiRow(sqlProxy SqlProxy, stmt QueryStatement, v ...interface{}) (qu
 	}
 
 	if len(v) == 0 {
-		pstmt, err := sqlProxy.prepare(execStmt.Query)
-		if err != nil {
-			return newQueryResultError(err)
-		}
-
+		rows, err := sqlProxy.query(execStmt.Query)
 		if sqlProxy.debugEnabled() {
 			sqlProxy.debugPrint("%s", stmt.Debug())
 		}
-
-		start := time.Now()
-		defer func() {
-			sqlProxy.recordExcution(execStmt.Id, start)
-		} ()
-		rows, err := pstmt.Query()
 		if err != nil {
-			if !sqlProxy.isTransaction() {
-				pstmt.Close()
-			}
 			return newQueryResultError(err)
 		}
-		return newQueryResult(pstmt, rows)
+		return newQueryResult(nil, rows)
 	}
 
 	defer func() {
@@ -552,6 +539,21 @@ func queryWithList(sqlProxy SqlProxy, stmt QueryStatement, args []interface{}) *
 		return newQueryResultError(fmt.Errorf("binding parameter count mismatch. defined=%d, args=%d", len(stmt.columnMention), len(args)))
 	}
 
+	start := time.Now()
+	defer func() {
+		sqlProxy.recordExcution(stmt.Id, start)
+	} ()
+
+	rows, err := sqlProxy.query(stmt.Query, args...)
+	if sqlProxy.debugEnabled() {
+		sqlProxy.debugPrint("%s", stmt.Debug(args...))
+	}
+	if err != nil {
+		return newQueryResultError(err)
+	}
+	return newQueryResult(nil, rows)
+
+	/*
 	pstmt, err := sqlProxy.prepare(stmt.Query)
 	if err != nil {
 		return newQueryResultError(err)
@@ -572,6 +574,7 @@ func queryWithList(sqlProxy SqlProxy, stmt QueryStatement, args []interface{}) *
 		return newQueryResultError(err)
 	}
 	return newQueryResult(pstmt, rows)
+	*/
 }
 
 
@@ -591,6 +594,21 @@ func queryWithMap(sqlProxy SqlProxy, stmt QueryStatement, m map[string]interface
 		param = append(param, found)
 	}
 
+	start := time.Now()
+	defer func() {
+		sqlProxy.recordExcution(stmt.Id, start)
+	} ()
+
+	rows, err := sqlProxy.query(stmt.Query, param...)
+	if sqlProxy.debugEnabled() {
+		sqlProxy.debugPrint("%s", stmt.Debug(param...))
+	}
+	if err != nil {
+		return newQueryResultError(err)
+	}
+	return newQueryResult(nil, rows)
+
+	/*
 	pstmt, err := sqlProxy.prepare(stmt.Query)
 	if err != nil {
 		return newQueryResultError(err)
@@ -608,6 +626,7 @@ func queryWithMap(sqlProxy SqlProxy, stmt QueryStatement, m map[string]interface
 		return newQueryResultError(err)
 	}
 	return newQueryResult(pstmt, rows)
+	*/
 }
 
 func queryMap(sqlProxy SqlProxy, val interface{}, stmt QueryStatement) *QueryResult {

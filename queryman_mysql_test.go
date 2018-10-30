@@ -733,14 +733,16 @@ func TestQueryWithInClause(t *testing.T) {
 	queryManager.ExecuteWithStmt(sqlInsertCity, "sejong", 44, true, 40.0, time.Now(), nil)
 
 	age := 10
-	strList := "\"pusan\",\"seoul\""
+	//strList := "\"pusan\",\"seoul\""
 	//strList := make([]string, 0)
 	//strList = append(strList, "seoul")
 	//strList = append(strList, "pusan")
 	// SELECT * FROM CITY WHERE Age > {Age} AND NAME IN ({Names})
-	sqlStr := "SELECT * FROM CITY WHERE Age > {Age} AND NAME IN (" + strList + ")"
-	result := queryManager.QueryWithStmt(sqlStr, age) // time is null
-	//result := queryManager.QueryWithStmt(sqlSelectCityWithInClause, age, strList) // time is null
+	//sqlStr := "SELECT * FROM CITY WHERE Age > {Age} AND NAME IN (" + strList + ")"
+	sqlStr := "SELECT * FROM CITY WHERE Age > {Age} AND NAME IN ({Name1}, {Name2})"
+	//result := queryManager.QueryWithStmt(sqlStr, age) // time is null
+	result := queryManager.QueryWithStmt(sqlStr, age, "seoul", "pusan")
+	//result := queryManager.QueryWithStmt(sqlSelectCityWithInClause, age, strList)
 	if result.GetError() != nil {
 		t.Error(result.GetError())
 		return

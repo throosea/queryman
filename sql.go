@@ -107,21 +107,16 @@ func execWithObject(sqlProxy SqlProxy, stmt QueryStatement, parameter interface{
 }
 
 func execWithMap(sqlProxy SqlProxy, stmt QueryStatement, m map[string]interface{}) (sql.Result, error) {
-	param := make([]interface{}, 0)
-
-	for _,v := range stmt.columnMention {
-		found, ok := m[v]
-		if !ok {
-			return nil, fmt.Errorf("execWithMap : not found \"%s\" from parameter values", v)
-		}
-		param = append(param, found)
+	effectiveQuery, param, bindErr := resolveColumnBindInMap(stmt, m)
+	if bindErr != nil {
+		return nil, bindErr.err
 	}
 
 	if sqlProxy.debugEnabled() {
 		sqlProxy.debugPrint("%s", stmt.Debug(param...))
 	}
 
-	return sqlProxy.exec(stmt.Query, param...)
+	return sqlProxy.exec(effectiveQuery, param...)
 }
 
 func execWithList(sqlProxy SqlProxy, stmt QueryStatement, args []interface{}) (sql.Result, error) {
@@ -272,7 +267,7 @@ func doExecWithNestedMap(sqlProxy SqlProxy, stmt QueryStatement, args []interfac
 
 		param := make([]interface{}, 0)
 		for _,v2 := range stmt.columnMention {
-			found, ok := m[v2]
+			found, ok := m[v2.Name()]
 			if !ok {
 				return i, result, fmt.Errorf("not found \"%s\" from map", v)
 			}
@@ -349,7 +344,7 @@ func doExecWithStructList(sqlProxy SqlProxy, stmt QueryStatement, args []interfa
 		param := make([]interface{}, 0)
 
 		for _,v := range stmt.columnMention {
-			found, ok := m[v]
+			found, ok := m[v.Name()]
 			if !ok {
 				return i, result, fmt.Errorf("doExecWithStructList : not found \"%s\" from parameter values", v)
 			}
@@ -467,7 +462,9 @@ func queryMultiRow(sqlProxy SqlProxy, stmt QueryStatement, v ...interface{}) (qu
 	case reflect.Ptr :
 		return newQueryResultError(ErrPtrIsNotSupported)
 	case reflect.Slice, reflect.Array :
-		return queryList(sqlProxy, val, execStmt)
+		if !stmt.firstArgsIsArray() {
+			return queryList(sqlProxy, val, execStmt)
+		}
 	case reflect.Struct :
 		if _, is := val.(driver.Valuer); !is {
 			return queryWithObject(sqlProxy, stmt, val)
@@ -532,49 +529,33 @@ func queryWithList(sqlProxy SqlProxy, stmt QueryStatement, args []interface{}) *
 	// check nested list
 	switch atype.Kind() {
 	case reflect.Slice, reflect.Struct, reflect.Map :
-		return newQueryResultError(fmt.Errorf("unacceptable parameter type in list. kind=%s", atype.Kind().String()))
+		if !stmt.firstArgsIsArray() {
+			return newQueryResultError(fmt.Errorf("unacceptable parameter type in list. kind=%s", atype.Kind().String()))
+		}
 	}
 
 	if len(stmt.columnMention) > len(args) {
 		return newQueryResultError(fmt.Errorf("binding parameter count mismatch. defined=%d, args=%d", len(stmt.columnMention), len(args)))
 	}
 
+	effectiveQuery, param, bindErr := resolveColumnBindInList(stmt, args)
+	if bindErr != nil {
+		return bindErr
+	}
+
 	start := time.Now()
 	defer func() {
 		sqlProxy.recordExcution(stmt.Id, start)
 	} ()
 
-	rows, err := sqlProxy.query(stmt.Query, args...)
+	rows, err := sqlProxy.query(effectiveQuery, param...)
 	if sqlProxy.debugEnabled() {
-		sqlProxy.debugPrint("%s", stmt.Debug(args...))
+		sqlProxy.debugPrint("%s", stmt.Debug(param...))
 	}
 	if err != nil {
 		return newQueryResultError(err)
 	}
 	return newQueryResult(nil, rows)
-
-	/*
-	pstmt, err := sqlProxy.prepare(stmt.Query)
-	if err != nil {
-		return newQueryResultError(err)
-	}
-
-	if sqlProxy.debugEnabled() {
-		sqlProxy.debugPrint("%s", stmt.Debug(args...))
-	}
-	start := time.Now()
-	defer func() {
-		sqlProxy.recordExcution(stmt.Id, start)
-	} ()
-	rows, err := pstmt.Query(args...)
-	if err != nil {
-		if !sqlProxy.isTransaction() {
-			pstmt.Close()
-		}
-		return newQueryResultError(err)
-	}
-	return newQueryResult(pstmt, rows)
-	*/
 }
 
 
@@ -583,15 +564,178 @@ func queryWithObject(sqlProxy SqlProxy, stmt QueryStatement, parameter interface
 	return queryWithMap(sqlProxy, stmt, m)
 }
 
-func queryWithMap(sqlProxy SqlProxy, stmt QueryStatement, m map[string]interface{}) *QueryResult {
+func resolveColumnBindInMap(stmt QueryStatement, m map[string]interface{}) (string, []interface{}, *QueryResult)	{
 	param := make([]interface{}, 0)
+	if !stmt.hasArrayBind() {
+		for _,v := range stmt.columnMention {
+			found, ok := m[v.Name()]
+			if !ok {
+				return stmt.Query, param, newQueryResultError(fmt.Errorf("queryWithMap : not found \"%s\" from parameter values", v))
+			}
+			param = append(param, found)
+		}
+		return stmt.Query, param, nil
+	}
 
-	for _,v := range stmt.columnMention {
-		found, ok := m[v]
-		if !ok {
-			return newQueryResultError(fmt.Errorf("queryWithMap : not found \"%s\" from parameter values", v))
+	clone := stmt.clone()
+	effectiveQuery := clone.Query
+	holdedQuery := clone.HoldedQuery
+
+	touch := false
+	for _, v := range clone.columnMention {
+		found := m[v.Name()]
+		if v.bindType == columnBindTypeNormal {
+			param = append(param, found)
+			continue
+		}
+
+		if v.bindType == columnBindTypeArray {
+			arr, cnt := flattenArray(found)
+			param = append(param, arr...)
+			if cnt > 1 {
+				if touch {
+					return effectiveQuery,
+						param,
+						newQueryResultError(fmt.Errorf("this version only support 1 IN array binding"))
+				}
+				holdedQuery = reformHoldQuery(holdedQuery, v, cnt)
+				touch = true
+			}
+			continue
 		}
 		param = append(param, found)
+	}
+
+	if touch {
+		effectiveQuery = queryNormalizer.resolveHolding(holdedQuery)
+	}
+	return effectiveQuery, param, nil
+
+	//fmt.Printf("resolveColumnBindInMap : %s\n", stmt.Id)
+	//for _,v := range stmt.columnMention {
+	//	found, ok := m[v.Name()]
+	//	if !ok {
+	//		return effectiveQuery, param, newQueryResultError(fmt.Errorf("queryWithMap : not found \"%s\" from parameter values", v))
+	//	}
+	//	param = append(param, found)
+	//}
+	//
+	//return effectiveQuery, param, nil
+}
+
+func resolveColumnBindInList(stmt QueryStatement, args []interface{}) (string, []interface{}, *QueryResult)	{
+	if !stmt.hasArrayBind() {
+		return stmt.Query, args, nil
+	}
+
+	clone := stmt.clone()
+	param := make([]interface{}, 0)
+	effectiveQuery := clone.Query
+	holdedQuery := clone.HoldedQuery
+
+	if len(clone.columnMention) > len(args) {
+		return effectiveQuery, param, newQueryResultError(fmt.Errorf("binding parameter count mismatch. defined=%d, args=%d", len(stmt.columnMention), len(args)))
+	}
+
+	touch := false
+	for i, v := range clone.columnMention {
+		found := args[i]
+		if v.bindType == columnBindTypeNormal {
+			param = append(param, found)
+			continue
+		}
+
+		if v.bindType == columnBindTypeArray {
+			arr, cnt := flattenArray(found)
+			param = append(param, arr...)
+			if cnt > 1 {
+				if touch {
+					return effectiveQuery,
+					param,
+					newQueryResultError(fmt.Errorf("this version only support 1 IN array binding"))
+				}
+				holdedQuery = reformHoldQuery(holdedQuery, v, cnt)
+				touch = true
+			}
+			continue
+		}
+		param = append(param, found)
+	}
+
+	if touch {
+		effectiveQuery = queryNormalizer.resolveHolding(holdedQuery)
+	}
+	return effectiveQuery, param, nil
+}
+
+func reformHoldQuery(holdQuery string, columnBind ColumnBind, cnt int) string {
+	prefix := holdQuery[:columnBind.holdPos-1]
+	suffix := holdQuery[columnBind.holdPos:]
+	complete := prefix + reformArrayHold(cnt) + suffix
+
+	return complete
+}
+
+func reformArrayHold(cnt int) string {
+	if cnt == 0 {
+		return ""
+	} else if cnt == 1 {
+		return string(holdByte)
+	}
+
+	var buf bytes.Buffer
+	for i:=0; i<cnt; i++ {
+		if i > 0 {
+			buf.WriteByte(',')
+		}
+		buf.WriteByte(holdByte)
+	}
+	return buf.String()
+}
+
+func flattenArray(v interface{}) ([]interface{}, int) {
+	param := make([]interface{}, 0)
+
+	varCnt := 1
+	atype := reflect.TypeOf(v)
+	val := v
+
+	// reform ptr
+	if atype.Kind() == reflect.Ptr {
+		atype = atype.Elem()
+		if reflect.ValueOf(val).IsNil() {
+			return param, varCnt
+		}
+		val = reflect.ValueOf(val).Elem().Interface()
+	}
+
+	if atype.Kind() != reflect.Slice && atype.Kind() != reflect.Array {
+		param = append(param, v)
+		return param, varCnt
+	}
+
+	if slice, ok := val.([]interface{}); ok  {
+		varCnt = 0
+		for i, item := range slice {
+			param = append(param, item)
+			varCnt = i
+		}
+		return param, varCnt
+	}
+
+	s := reflect.ValueOf(v)
+	for i := 0; i < s.Len(); i++ {
+		param = append(param, s.Index(i).Interface())
+		varCnt++
+	}
+
+	return param, s.Len()
+}
+
+func queryWithMap(sqlProxy SqlProxy, stmt QueryStatement, m map[string]interface{}) *QueryResult {
+	effectiveQuery, param, bindErr := resolveColumnBindInMap(stmt, m)
+	if bindErr != nil {
+		return bindErr
 	}
 
 	start := time.Now()
@@ -599,7 +743,7 @@ func queryWithMap(sqlProxy SqlProxy, stmt QueryStatement, m map[string]interface
 		sqlProxy.recordExcution(stmt.Id, start)
 	} ()
 
-	rows, err := sqlProxy.query(stmt.Query, param...)
+	rows, err := sqlProxy.query(effectiveQuery, param...)
 	if sqlProxy.debugEnabled() {
 		sqlProxy.debugPrint("%s", stmt.Debug(param...))
 	}
@@ -607,26 +751,6 @@ func queryWithMap(sqlProxy SqlProxy, stmt QueryStatement, m map[string]interface
 		return newQueryResultError(err)
 	}
 	return newQueryResult(nil, rows)
-
-	/*
-	pstmt, err := sqlProxy.prepare(stmt.Query)
-	if err != nil {
-		return newQueryResultError(err)
-	}
-	if sqlProxy.debugEnabled() {
-		sqlProxy.debugPrint("%s", stmt.Debug(param...))
-	}
-	start := time.Now()
-	defer func() {
-		sqlProxy.recordExcution(stmt.Id, start)
-	} ()
-	rows, err := pstmt.Query(param...)
-	if err != nil {
-		pstmt.Close()
-		return newQueryResultError(err)
-	}
-	return newQueryResult(pstmt, rows)
-	*/
 }
 
 func queryMap(sqlProxy SqlProxy, val interface{}, stmt QueryStatement) *QueryResult {

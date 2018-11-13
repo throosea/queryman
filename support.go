@@ -24,13 +24,13 @@
 package queryman
 
 import (
-	"strings"
-	"fmt"
 	"bytes"
-	"unicode"
-	"reflect"
 	"database/sql"
+	"fmt"
+	"reflect"
+	"strings"
 	"time"
+	"unicode"
 )
 
 const (
@@ -107,6 +107,7 @@ func newNormalizer(driverName string) QueryNormalizer {
 
 type SqlVariablePlaceholderStrategy interface {
 	getNextMark() string
+	clone()	SqlVariablePlaceholderStrategy
 }
 
 type MysqlPlaceholderStrategy struct {
@@ -114,6 +115,10 @@ type MysqlPlaceholderStrategy struct {
 
 func (m *MysqlPlaceholderStrategy) getNextMark() string {
 	return "?"
+}
+
+func (m *MysqlPlaceholderStrategy) clone() SqlVariablePlaceholderStrategy {
+	return &MysqlPlaceholderStrategy{}
 }
 
 type PostgreSQLPlaceholderStrategy struct {
@@ -126,6 +131,12 @@ func (p *PostgreSQLPlaceholderStrategy) getNextMark() string {
 	return val
 }
 
+func (p *PostgreSQLPlaceholderStrategy) clone() SqlVariablePlaceholderStrategy {
+	n := &PostgreSQLPlaceholderStrategy{}
+	n.paramIndex = 0
+	return n
+}
+
 type OraclePlaceholderStrategy struct {
 	paramIndex		int
 }
@@ -136,24 +147,33 @@ func (o *OraclePlaceholderStrategy) getNextMark() string {
 	return val
 }
 
+func (p *OraclePlaceholderStrategy) clone() SqlVariablePlaceholderStrategy {
+	n := &OraclePlaceholderStrategy{}
+	n.paramIndex = 0
+	return n
+}
+
 type UserQueryNormalizer struct {
 	strategy SqlVariablePlaceholderStrategy
 }
 
+//var holdByte byte = '`'
+var holdByte byte = 0x0
+
 func (n *UserQueryNormalizer) normalize(stmt *QueryStatement) error {
 	stmt.Query = strings.Trim(stmt.Query, " \r\n\t")
-	stmt.columnMention = make([]string, 0)
+	stmt.columnMention = make([]ColumnBind, 0)
 	if len(stmt.Query) < 3 {
 		return fmt.Errorf("invalid query : %s", stmt.Query)
 	}
 
-	var buffer bytes.Buffer
+	var hold	bytes.Buffer
 
 	queryLen := len(stmt.Query)
 	for i:=0; i<queryLen; i++ {
 		ch := stmt.Query[i]
 		if ch != delimStartCharacter {
-			buffer.WriteByte(ch)
+			hold.WriteByte(ch)
 			continue
 		}
 
@@ -169,15 +189,52 @@ func (n *UserQueryNormalizer) normalize(stmt *QueryStatement) error {
 		if strings.Index(v, delimStartString) >= 0 {
 			return fmt.Errorf("invalid variable declare format : %s", stmt.Query)
 		}
-		stmt.columnMention = append(stmt.columnMention, v)
+
+		if isInClause(stmt.Query[:i])	{
+			stmt.columnMention = append(stmt.columnMention, NewColumnBindArray(v, hold.Len() + 1))
+		} else {
+			stmt.columnMention = append(stmt.columnMention, NewColumnBind(v, hold.Len() + 1))
+		}
 		i = i + stopIndex + 1
-		buffer.WriteString(n.strategy.getNextMark())
+		hold.WriteByte(holdByte)
 	}
 
-	stmt.Query = buffer.String()
+	stmt.HoldedQuery = hold.String()
+	stmt.Query = n.resolveHolding(stmt.HoldedQuery)
 	return nil
 }
 
+
+func (n *UserQueryNormalizer) resolveHolding(query string) string {
+	var buffer bytes.Buffer
+
+	stgy := n.strategy.clone()
+	queryLen := len(query)
+	for i:=0; i<queryLen; i++ {
+		ch := query[i]
+		if ch != holdByte {
+			buffer.WriteByte(ch)
+			continue
+		}
+
+		buffer.WriteString(stgy.getNextMark())
+	}
+
+	return buffer.String()
+}
+
+func isInClause(sqlPrefix string) bool 	{
+	s := strings.Replace(sqlPrefix, " ", "", -1)
+	s = strings.Replace(s, "\n", "", -1)
+	s = strings.Replace(s, "\r", "", -1)
+	if len(s) < 3 {
+		return false
+	}
+	if strings.ToUpper(s[len(s)-3:]) == "IN("	{
+		return true
+	}
+	return false
+}
 
 type StructureScanner struct {
 	scanIndex		int

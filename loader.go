@@ -234,7 +234,7 @@ func newQueryStatement(sqlType declareElementType)	QueryStatement	{
 	stmt.eleType = sqlType
 	stmt.Id = currentId
 	stmt.clause = make([]IfClause, 0)
-	stmt.columnMention = make([]string, 0)
+	stmt.columnMention = make([]ColumnBind, 0)
 	return stmt
 }
 

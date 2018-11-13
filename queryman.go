@@ -35,6 +35,7 @@ var queryNormalizer         QueryNormalizer
 
 type QueryNormalizer interface {
 	normalize(stmt *QueryStatement) error
+	resolveHolding(query string) string
 }
 
 type QueryMan struct {

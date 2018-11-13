@@ -110,7 +110,81 @@ type QueryStatement struct {
 	Id            string		`xml:"id,attr"`
 	Query         string		`xml:",cdata"`
 	clause        []IfClause	`xml:"if"`
-	columnMention []string
+	columnMention []ColumnBind
+	HoldedQuery   string
+}
+
+func (q QueryStatement) hasArrayBind()	bool	{
+	if q.columnMention == nil {
+		return false
+	}
+
+	for _, v := range q.columnMention {
+		if v.bindType == columnBindTypeArray {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (q QueryStatement) firstArgsIsArray() bool {
+	if q.columnMention != nil && len(q.columnMention) > 0 {
+		if q.columnMention[0].bindType == columnBindTypeArray {
+			return true
+		}
+	}
+	return false
+}
+
+func (q QueryStatement) String() string {
+	return fmt.Sprintf("eleType=[%s], id=[%s], query=[%s], caluse=[%v], columns=[%v], hold=[%s]",
+		q.eleType, q.Id, q.Query, q.clause, q.columnMention, q.HoldedQuery)
+}
+
+const (
+	columnBindTypeNormal = iota
+	columnBindTypeArray
+)
+
+type columnBindType uint8
+
+func (c columnBindType) String() string {
+	switch c {
+	case columnBindTypeNormal :	return "NORMAL"
+	case columnBindTypeArray :	return "ARRAY"
+	}
+	return "UNKNOWN"
+}
+
+type ColumnBind struct {
+	name 		string
+	holdPos		int
+	bindType 	columnBindType
+}
+
+func NewColumnBind(name string, pos int) ColumnBind {
+	b := ColumnBind{}
+	b.name = name
+	b.holdPos = pos
+	b.bindType = columnBindTypeNormal
+	return b
+}
+
+func NewColumnBindArray(name string, pos int) ColumnBind {
+	b := ColumnBind{}
+	b.name = name
+	b.holdPos = pos
+	b.bindType = columnBindTypeArray
+	return b
+}
+
+func (c ColumnBind) Name() string	{
+	return c.name
+}
+
+func (c ColumnBind) String() string {
+	return fmt.Sprintf("%s/%d/%s", c.name, c.holdPos, c.bindType)
 }
 
 func (stmt QueryStatement) clone() QueryStatement {
@@ -118,16 +192,16 @@ func (stmt QueryStatement) clone() QueryStatement {
 	clone.eleType = stmt.eleType
 	clone.Id = stmt.Id
 	clone.Query = stmt.Query
+	clone.HoldedQuery = stmt.HoldedQuery
 	clone.clause = make([]IfClause, 0)
 	for _, v := range stmt.clause {
 		clone.clause = append(clone.clause, v)
 	}
+	clone.columnMention = make([]ColumnBind, 0)
+	for _, v := range stmt.columnMention {
+		clone.columnMention = append(clone.columnMention, v)
+	}
 	return clone
-}
-
-func (stmt QueryStatement) String() string {
-	return fmt.Sprintf("eleType=[%s], id=[%s], query=[%s], caluse=[%v], columns=[%v]",
-			stmt.eleType, stmt.Id, stmt.Query, stmt.clause, stmt.columnMention)
 }
 
 func (stmt QueryStatement) Debug(param ...interface{}) string {
@@ -150,6 +224,7 @@ func (stmt QueryStatement) HasCondition() bool {
 	return false
 }
 
+// if condition 처리를 통해 SQL 을 재구성한다
 func (stmt QueryStatement) RefineStatement(params map[string]interface{}) (QueryStatement, error) {
 	refined := stmt.clone()
 	for _, v := range stmt.clause {

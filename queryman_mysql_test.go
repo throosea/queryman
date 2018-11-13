@@ -725,7 +725,54 @@ func TestQueryButNoMoreData(t *testing.T) {
 	t.Error("should be no more data")
 }
 
-func TestQueryWithInClause(t *testing.T) {
+func TestQueryInClauseWithList1(t *testing.T) {
+	setup()
+
+	queryManager.ExecuteWithStmt(sqlInsertCity, "seoul", 42, true, 40.0, time.Now(), nil)
+	queryManager.ExecuteWithStmt(sqlInsertCity, "pusan", 43, true, 40.0, time.Now(), nil)
+	queryManager.ExecuteWithStmt(sqlInsertCity, "sejong", 44, true, 40.0, time.Now(), nil)
+
+	age := 10
+	sqlStr := "SELECT * FROM CITY WHERE Age > {Age} AND NAME IN ({Names})"
+	names := make([]string, 0)
+	names = append(names, "seoul")
+	names = append(names, "pusan")
+	result := queryManager.QueryWithStmt(sqlStr, age, names)
+	if result.GetError() != nil {
+		t.Error(result.GetError())
+		return
+	}
+
+	defer result.Close()
+
+	type NullableCity struct {
+		Id		sql.NullInt64
+		Name	sql.NullString
+		Age		sql.NullInt64
+		IsMan	sql.NullBool
+		Percentage sql.NullFloat64
+		CreateTime mysql.NullTime
+		UpdateTime mysql.NullTime
+	}
+
+	list := make([]NullableCity, 0)
+	city := NullableCity{}
+	for result.Next() {
+		err := result.Scan(&city)
+		if err != nil {
+			t.Error(err.Error())
+			return
+		}
+		list = append(list, city)
+	}
+
+	log.Printf("list : %d\n", len(list))
+	for i, v := range list {
+		log.Printf("[%d] %v\n", i, v)
+	}
+}
+
+func TestQueryInClauseWithList2(t *testing.T) {
 	setup()
 
 	queryManager.ExecuteWithStmt(sqlInsertCity, "seoul", 42, true, 40.0, time.Now(), nil)
@@ -739,10 +786,63 @@ func TestQueryWithInClause(t *testing.T) {
 	//strList = append(strList, "pusan")
 	// SELECT * FROM CITY WHERE Age > {Age} AND NAME IN ({Names})
 	//sqlStr := "SELECT * FROM CITY WHERE Age > {Age} AND NAME IN (" + strList + ")"
-	sqlStr := "SELECT * FROM CITY WHERE Age > {Age} AND NAME IN ({Name1}, {Name2})"
+	//sqlStr := "SELECT * FROM CITY WHERE Age > {Age} AND NAME IN ({Name1})"
+	sqlStr := "SELECT * FROM CITY WHERE NAME IN ({Names}) AND Age > {Age}"
 	//result := queryManager.QueryWithStmt(sqlStr, age) // time is null
-	result := queryManager.QueryWithStmt(sqlStr, age, "seoul", "pusan")
+	names := make([]string, 0)
+	names = append(names, "seoul")
+	names = append(names, "pusan")
+	result := queryManager.QueryWithStmt(sqlStr, names, age)
 	//result := queryManager.QueryWithStmt(sqlSelectCityWithInClause, age, strList)
+	if result.GetError() != nil {
+		t.Error(result.GetError())
+		return
+	}
+
+	defer result.Close()
+
+	type NullableCity struct {
+		Id		sql.NullInt64
+		Name	sql.NullString
+		Age		sql.NullInt64
+		IsMan	sql.NullBool
+		Percentage sql.NullFloat64
+		CreateTime mysql.NullTime
+		UpdateTime mysql.NullTime
+	}
+
+	list := make([]NullableCity, 0)
+	city := NullableCity{}
+	for result.Next() {
+		err := result.Scan(&city)
+		if err != nil {
+			t.Error(err.Error())
+			return
+		}
+		list = append(list, city)
+	}
+
+	log.Printf("list : %d\n", len(list))
+	for i, v := range list {
+		log.Printf("[%d] %v\n", i, v)
+	}
+}
+
+func TestQueryInClauseWithMap(t *testing.T) {
+	setup()
+
+	queryManager.ExecuteWithStmt(sqlInsertCity, "seoul", 42, true, 40.0, time.Now(), nil)
+	queryManager.ExecuteWithStmt(sqlInsertCity, "pusan", 43, true, 40.0, time.Now(), nil)
+	queryManager.ExecuteWithStmt(sqlInsertCity, "sejong", 44, true, 40.0, time.Now(), nil)
+
+	m := make(map[string]interface{})
+	sqlStr := "SELECT * FROM CITY WHERE NAME IN ({Names}) AND Age > {Age}"
+	names := make([]string, 0)
+	names = append(names, "seoul")
+	names = append(names, "pusan")
+	m["Names"] = names
+	m["Age"] = 10
+	result := queryManager.QueryWithStmt(sqlStr, m)
 	if result.GetError() != nil {
 		t.Error(result.GetError())
 		return

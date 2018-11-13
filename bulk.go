@@ -141,7 +141,7 @@ func (b *querymanBulk) addWithObject(parameter interface{}) error {
 func (b *querymanBulk) addWithMap(m map[string]interface{}) error {
 	passing := make([]interface{}, 0)
 	for _,v := range b.stmt.columnMention {
-		found, ok := m[v]
+		found, ok := m[v.Name()]
 		if !ok {
 			return fmt.Errorf("addWithMap : not found \"%s\" from parameter values", v)
 		}
@@ -223,7 +223,7 @@ func (b *querymanBulk) addWithStructList(args []interface{}) error {
 		passing := make([]interface{}, 0)
 
 		for _,v := range b.stmt.columnMention {
-			found, ok := m[v]
+			found, ok := m[v.Name()]
 			if !ok {
 				return fmt.Errorf("addWithStructList : not found \"%s\" from parameter values", v)
 			}
@@ -254,7 +254,7 @@ func (b *querymanBulk) addWithNestedMap(args []interface{}) error {
 
 		passing := make([]interface{}, 0)
 		for _,v2 := range b.stmt.columnMention {
-			found, ok := m[v2]
+			found, ok := m[v2.Name()]
 			if !ok {
 				return fmt.Errorf("not found \"%s\" from map", v)
 			}

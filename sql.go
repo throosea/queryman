@@ -73,7 +73,9 @@ func execute(sqlProxy SqlProxy, stmt QueryStatement, v ...interface{}) (result s
 	case reflect.Ptr :
 		return nil, ErrPtrIsNotSupported
 	case reflect.Slice, reflect.Array :
-		return execList(sqlProxy, val, execStmt)
+		if !stmt.hasArrayBind() {
+			return execList(sqlProxy, val, execStmt)
+		}
 	case reflect.Struct :
 		if _, is := val.(driver.Valuer); !is {
 			return execWithObject(sqlProxy, execStmt, val)
@@ -131,6 +133,20 @@ func execWithList(sqlProxy SqlProxy, stmt QueryStatement, args []interface{}) (s
 			return nil, ErrNilPtr
 		}
 		val = reflect.ValueOf(val).Elem().Interface()
+	}
+
+	if stmt.hasArrayBind() {
+		effectiveQuery, param, bindErr := resolveColumnBindInList(stmt, args)
+		if bindErr != nil {
+			return nil, bindErr
+		}
+
+		start := time.Now()
+		defer func() {
+			sqlProxy.recordExcution(stmt.Id, start)
+		} ()
+
+		return sqlProxy.exec(effectiveQuery, param...)
 	}
 
 	// check nested list
@@ -540,7 +556,7 @@ func queryWithList(sqlProxy SqlProxy, stmt QueryStatement, args []interface{}) *
 
 	effectiveQuery, param, bindErr := resolveColumnBindInList(stmt, args)
 	if bindErr != nil {
-		return bindErr
+		return newQueryResultError(bindErr)
 	}
 
 	start := time.Now()
@@ -623,7 +639,7 @@ func resolveColumnBindInMap(stmt QueryStatement, m map[string]interface{}) (stri
 	//return effectiveQuery, param, nil
 }
 
-func resolveColumnBindInList(stmt QueryStatement, args []interface{}) (string, []interface{}, *QueryResult)	{
+func resolveColumnBindInList(stmt QueryStatement, args []interface{}) (string, []interface{}, error)	{
 	if !stmt.hasArrayBind() {
 		return stmt.Query, args, nil
 	}
@@ -634,7 +650,7 @@ func resolveColumnBindInList(stmt QueryStatement, args []interface{}) (string, [
 	holdedQuery := clone.HoldedQuery
 
 	if len(clone.columnMention) > len(args) {
-		return effectiveQuery, param, newQueryResultError(fmt.Errorf("binding parameter count mismatch. defined=%d, args=%d", len(stmt.columnMention), len(args)))
+		return effectiveQuery, param, fmt.Errorf("binding parameter count mismatch. defined=%d, args=%d", len(stmt.columnMention), len(args))
 	}
 
 	touch := false
@@ -652,7 +668,7 @@ func resolveColumnBindInList(stmt QueryStatement, args []interface{}) (string, [
 				if touch {
 					return effectiveQuery,
 					param,
-					newQueryResultError(fmt.Errorf("this version only support 1 IN array binding"))
+					fmt.Errorf("this version only support 1 IN array binding")
 				}
 				holdedQuery = reformHoldQuery(holdedQuery, v, cnt)
 				touch = true

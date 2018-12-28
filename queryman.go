@@ -55,18 +55,9 @@ func (man *QueryMan) GetMaxConnCount() int {
 }
 
 func (man *QueryMan) registStatement(queryStatement QueryStatement) error {
-	if queryNormalizer == nil {
-		queryNormalizer = newNormalizer(man.preference.DriverName)
-		if queryNormalizer == nil {
-			return fmt.Errorf("not found normalizer for %s", man.preference.DriverName)
-		}
-	}
-
-	if !queryStatement.HasCondition()	{
-		err := queryNormalizer.normalize(&queryStatement)
-		if err != nil {
-			return err
-		}
+	queryStatement, err := man.buildStatement(queryStatement)
+	if err != nil {
+		return err
 	}
 
 	id := strings.ToUpper(queryStatement.Id)
@@ -81,6 +72,24 @@ func (man *QueryMan) registStatement(queryStatement QueryStatement) error {
 	}
 
 	return nil
+}
+
+func (man *QueryMan) buildStatement(queryStatement QueryStatement) (QueryStatement, error) {
+	if queryNormalizer == nil {
+		queryNormalizer = newNormalizer(man.preference.DriverName)
+		if queryNormalizer == nil {
+			return queryStatement, fmt.Errorf("not found normalizer for %s", man.preference.DriverName)
+		}
+	}
+
+	if !queryStatement.HasCondition()	{
+		err := queryNormalizer.normalize(&queryStatement)
+		if err != nil {
+			return queryStatement, err
+		}
+	}
+
+	return queryStatement, nil
 }
 
 func (man *QueryMan) Close() error {
@@ -163,9 +172,7 @@ func buildUserQueryStatement(manager *QueryMan, query string)	(QueryStatement, e
 	stmt.Id = query
 	stmt.Query = query
 
-	err := manager.registStatement(stmt)
-	saved, _ := manager.statementMap[strings.ToUpper(query)]
-	return saved, err
+	return manager.buildStatement(stmt)
 }
 
 func getDeclareSqlType(query string) declareElementType {

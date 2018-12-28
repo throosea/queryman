@@ -725,6 +725,29 @@ func TestQueryButNoMoreData(t *testing.T) {
 	t.Error("should be no more data")
 }
 
+func TestQueryInClauseDelete(t *testing.T) {
+	setup()
+
+	queryManager.ExecuteWithStmt(sqlInsertCity, "seoul", 42, true, 40.0, time.Now(), nil)
+	queryManager.ExecuteWithStmt(sqlInsertCity, "pusan", 43, true, 40.0, time.Now(), nil)
+	queryManager.ExecuteWithStmt(sqlInsertCity, "sejong", 44, true, 40.0, time.Now(), nil)
+
+	sqlStr := "DELETE FROM CITY WHERE NAME IN ( {Names} )"
+	names := make([]string, 0)
+	names = append(names, "seoul")
+	names = append(names, "pusan")
+	result, err := queryManager.ExecuteWithStmt(sqlStr, names)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	affected, _ := result.RowsAffected()
+	if affected != 2 {
+		t.Errorf("row affected = %d", affected)
+		return
+	}
+}
 func TestQueryInClauseWithList1(t *testing.T) {
 	setup()
 
@@ -733,7 +756,7 @@ func TestQueryInClauseWithList1(t *testing.T) {
 	queryManager.ExecuteWithStmt(sqlInsertCity, "sejong", 44, true, 40.0, time.Now(), nil)
 
 	age := 10
-	sqlStr := "SELECT * FROM CITY WHERE Age > {Age} AND NAME IN ({Names})"
+	sqlStr := "SELECT * FROM CITY WHERE Age > {Age} AND NAME IN ( {Names} )"
 	names := make([]string, 0)
 	names = append(names, "seoul")
 	names = append(names, "pusan")
@@ -780,20 +803,11 @@ func TestQueryInClauseWithList2(t *testing.T) {
 	queryManager.ExecuteWithStmt(sqlInsertCity, "sejong", 44, true, 40.0, time.Now(), nil)
 
 	age := 10
-	//strList := "\"pusan\",\"seoul\""
-	//strList := make([]string, 0)
-	//strList = append(strList, "seoul")
-	//strList = append(strList, "pusan")
-	// SELECT * FROM CITY WHERE Age > {Age} AND NAME IN ({Names})
-	//sqlStr := "SELECT * FROM CITY WHERE Age > {Age} AND NAME IN (" + strList + ")"
-	//sqlStr := "SELECT * FROM CITY WHERE Age > {Age} AND NAME IN ({Name1})"
 	sqlStr := "SELECT * FROM CITY WHERE NAME IN ({Names}) AND Age > {Age}"
-	//result := queryManager.QueryWithStmt(sqlStr, age) // time is null
 	names := make([]string, 0)
 	names = append(names, "seoul")
 	names = append(names, "pusan")
 	result := queryManager.QueryWithStmt(sqlStr, names, age)
-	//result := queryManager.QueryWithStmt(sqlSelectCityWithInClause, age, strList)
 	if result.GetError() != nil {
 		t.Error(result.GetError())
 		return

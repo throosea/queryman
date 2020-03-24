@@ -25,6 +25,7 @@ package queryman
 
 import (
 	"database/sql"
+	"fmt"
 	"runtime"
 	"time"
 )
@@ -33,17 +34,22 @@ type DBTransaction struct {
 	tx                 *sql.Tx
 	queryFinder        QueryStatementFinder
 	fieldNameConverter FieldNameConvertStrategy
-	debugger 			SqlDebugger
+	debugger           SqlDebugger
 }
 
 func (t *DBTransaction) Rollback() error {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Println("Rollback panic", r)
+			return
+		}
+	}()
 	return t.tx.Rollback()
 }
 
 func (t *DBTransaction) Commit() error {
 	return t.tx.Commit()
 }
-
 
 func newTransaction(debugger SqlDebugger, tx *sql.Tx, queryFinder QueryStatementFinder, fieldNameConverter FieldNameConvertStrategy) *DBTransaction {
 	dbTransaction := DBTransaction{}
@@ -74,15 +80,15 @@ func (t *DBTransaction) isTransaction() bool {
 	return true
 }
 
-func (t *DBTransaction) debugEnabled() bool	{
+func (t *DBTransaction) debugEnabled() bool {
 	return t.debugger.debugEnabled()
 }
 
-func (t *DBTransaction) debugPrint(format string, params ...interface{})	{
+func (t *DBTransaction) debugPrint(format string, params ...interface{}) {
 	t.debugger.debugPrint(format, params...)
 }
 
-func (t *DBTransaction) recordExcution(stmtId string, start time.Time)	{
+func (t *DBTransaction) recordExcution(stmtId string, start time.Time) {
 	t.debugger.recordExcution(stmtId, start)
 }
 
@@ -145,7 +151,6 @@ func (t *DBTransaction) QueryWithStmt(id string, v ...interface{}) *QueryResult 
 	queryedRow.fieldNameConverter = t.fieldNameConverter
 	return queryedRow
 }
-
 
 func (t *DBTransaction) QueryRow(v ...interface{}) *QueryRowResult {
 	pc, _, _, _ := runtime.Caller(1)
